@@ -1,0 +1,56 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Outfit:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --ink: 15 42 46;
+    --clay: 199 109 74;
+    --sage: 110 133 122;
+    --sand: 246 241 234;
+    --paper: 255 253 250;
+    --line: 232 221 209;
+  }
+
+  body {
+    font-family: 'Space Grotesk', 'Outfit', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    background-color: rgb(var(--sand));
+    color: rgb(var(--ink));
+  }
+}
+
+@layer components {
+  .app-shell {
+    @apply min-h-screen bg-[radial-gradient(circle_at_20%_10%,rgba(199,109,74,0.12),transparent_40%),radial-gradient(circle_at_80%_0%,rgba(110,133,122,0.14),transparent_35%),linear-gradient(180deg,rgba(255,253,250,0.95),rgba(246,241,234,0.95))];
+  }
+
+  .surface-card {
+    @apply bg-[rgb(var(--paper))] border border-[rgb(var(--line))] rounded-2xl shadow-[0_24px_48px_rgba(15,42,46,0.08)];
+  }
+
+  .surface-panel {
+    @apply bg-[rgba(255,253,250,0.75)] border border-[rgba(232,221,209,0.8)] rounded-2xl shadow-[0_18px_36px_rgba(15,42,46,0.08)];
+  }
+
+  .surface-soft {
+    @apply bg-[rgba(255,253,250,0.6)] border border-[rgba(232,221,209,0.6)] rounded-xl;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-[rgb(var(--ink))] text-white px-4 py-2 text-sm font-medium shadow-[0_12px_24px_rgba(15,42,46,0.18)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_28px_rgba(15,42,46,0.2)];
+  }
+
+  .btn-accent {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-[rgb(var(--clay))] text-white px-4 py-2 text-sm font-medium shadow-[0_12px_24px_rgba(199,109,74,0.2)] transition hover:-translate-y-0.5;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-[rgb(var(--line))] px-4 py-2 text-sm font-medium text-[rgb(var(--ink))] hover:bg-[rgba(255,253,250,0.8)];
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-2 rounded-full border border-[rgba(15,42,46,0.2)] bg-[rgba(15,42,46,0.06)] px-3 py-1 text-xs font-medium text-[rgb(var(--ink))];
+  }
+}

@@ -1,0 +1,86 @@
+ 
+ 
+Cahier des Charges  
+Application Web Immobilière  
+Auteur : NARAF GROUPE SARL  
+Date : NOVEMBRE  2025  
+1. Présentation du projet  
+L’objectif est de concevoir une application web immobilière permettant :  
+- La consultation d’annonces immobilières.  
+- La consultation de projet immobilier en cours  de construction  
+- La consultation de projet de construction  complet  avec devis détailler   
+- L’inscription  des visiteurs du site  
+- Client  
+- Propriétaire  de bien immobilier  
+- Agent immob ilier 
+- Investisseur  
+- Entreprise de partenariat  
+- La gestion centralisée des demandes  et des inscriptions via un back office.  
+Le système repose sur une collaboration entre les visiteurs, les propriétaires, les agents 
+immobiliers, le gestionnaire et l’administrateur.  
+2. Objectifs fonctionnels  
+2.1 Partie Frontend (Public)  
+2.1.1 Consultation libre des annonces  
+✓ Immobilier  
+- Liste des biens immobiliers disponibles (vente et location).  
+- Filtres de recherche : type de bien, prix, localisation, surface, etc.  
+- Détail d’une annonce avec photos, description, caractéristiques, contact, carte.  
+✓ Construction  
+ Liste  de projet de construction  plan 3D  
+ Formulaire  de demande d ’un projet de construction  
+  
+✓ Investissement  
+Liste des projets d ’investissement disponible avec détail  
+Formulaire de proposition d ’un projet d ’investissement  
+2.1.2 Création de compte  
+- Inscription en tant que :  
+- Visiteur simple : consulter les annonces, envoyer des messages, faire des demandes de 
+recherche , soumettre un projet de construction.  
+- Propriétaire : soumettre une annonce à publier . 
+- Agent immobilier  : Soumettre une demande pour être un agent immobilier sur la plate forme  
+2.1.3 Tableau de bord propriétaire  
+- Création d’annonce : titre, type (vente/location), description, prix, localisation, photos, etc.  
+- Suivi de l’état des annonces (en attente, validée, rejetée).  
+- Édition ou suppression des annonces (tant qu’elles ne sont pas validées).  
+- Historique des annonces.  
+2.1.4 Compte visiteur simple  
+- Envoi de messages aux agents via les annonces consultées.  
+- Formulaire de demande personnalisée de recherche de biens.  
+- Historique des messages envoyés.  
+2.1.5 intégration  d’une IA  
+- Assistance et Conseil visiteur  
+ 
+2.2 Partie Back Office  
+Inspiré du Template  : https://techzaa.in/lahomes/vue.html#  
+2.2.1 Profils d’utilisateurs  
+- Administrateur :  
+  - Créer des comptes pour les agents et gestionnaires.  
+  - Accéder à toutes les données du système.  
+  - Superviser les affectations et publications.  
+- Gestionnaire :  
+  - Visualiser les annonces créées par les propriétaires.  
+  - Assigner les annonces à des agents immobiliers.  
+- Agent immobilier :  
+  - Recevoir les annonces à traiter.  
+  - Valider ou rejeter une annonce avec commentaire.  
+  - Recevoir les demandes des visiteurs (messages, recherche de bien).  
+  - Répondre aux messages/demandes . 
+  - Gérer la relation client (CRM simplifié).  
+3. Architecture technique  
+3.1 Technologies suggérées  
+- Frontend : React-JS 
+- Backend : PHP ( Laravel )- Base de données : MySQL ou PostgreSQL  
+- Hébergement : Serveur mutualisé ou VPS, Nom de domaine, SSL  
+- Templates utilisés   : 
+  - Front : https://code -wrapper.com/royal -homes/#  
+  - Back : https://techzaa.in/lahomes/vue.html#  
+4. Planning estimatif  
+- Rédaction des spécifications détaillées :  
+- Conception base de données & API :  
+- Développement frontend :  
+- Développement backend + back office :  
+- Tests fonctionnels et correctifs :  
+- Livraison finale :   
+5. Maintenance & évolutions  
+- Correctifs de bugs ( 3 mois après livraison).   
+- Support technique possible (à définir)  
