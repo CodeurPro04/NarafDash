@@ -12,7 +12,7 @@ const normalizeApiBase = (rawUrl) => {
 };
 
 const buildEcho = (token) => {
-  const rawBaseUrl = import.meta.env.VITE_API_URL || 'https://api.kovatech.digital';
+  const rawBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
   const apiBaseUrl = normalizeApiBase(rawBaseUrl);
   const authEndpoint = `${apiBaseUrl}/api/v1/broadcasting/auth`;
   const key = import.meta.env.VITE_PUSHER_APP_KEY;

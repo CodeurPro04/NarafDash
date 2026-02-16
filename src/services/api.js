@@ -8,7 +8,7 @@ const normalizeApiBase = (rawUrl) => {
 
 // Configuration de base d'Axios
 const rawBaseUrl =
-  import.meta.env.VITE_API_URL || "https://api.kovatech.digital";
+  import.meta.env.VITE_API_URL || "http://localhost:8000";
 const apiBaseUrl = normalizeApiBase(rawBaseUrl);
 const api = axios.create({
   baseURL: `${apiBaseUrl}/api`,
@@ -179,6 +179,26 @@ export const adminService = {
   rejectProposal: (uuid) =>
     api.post(`/v1/admin/investments/proposals/${uuid}/reject`),
 
+  // Modeles de maison
+  getHouseModels: () => api.get("/v1/admin/house-models"),
+  createHouseModel: (data) =>
+    api.post(
+      "/v1/admin/house-models",
+      data,
+      data instanceof FormData
+        ? { headers: { "Content-Type": "multipart/form-data" } }
+        : undefined,
+    ),
+  updateHouseModel: (uuid, data) =>
+    api.put(
+      `/v1/admin/house-models/${uuid}`,
+      data,
+      data instanceof FormData
+        ? { headers: { "Content-Type": "multipart/form-data" } }
+        : undefined,
+    ),
+  deleteHouseModel: (uuid) => api.delete(`/v1/admin/house-models/${uuid}`),
+
   // Partenariats
   getPendingPartnerships: () => api.get("/v1/admin/partnerships/pending"),
   approvePartnership: (uuid) =>
@@ -186,6 +206,14 @@ export const adminService = {
   rejectPartnership: (uuid, data) =>
     api.post(`/v1/admin/partnerships/${uuid}/reject`, data),
   getAllPartnerships: () => api.get("/v1/admin/partnerships/all"),
+  updatePartnershipContent: (uuid, data) =>
+    api.post(
+      `/v1/admin/partnerships/${uuid}/content`,
+      data,
+      data instanceof FormData
+        ? { headers: { "Content-Type": "multipart/form-data" } }
+        : undefined,
+    ),
   deletePartnership: (uuid) => api.delete(`/v1/admin/partnerships/${uuid}`),
 
   // Types de propriétés

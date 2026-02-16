@@ -17,6 +17,7 @@ import AdminPropertyCatalog from "./components/admin/AdminPropertyCatalog";
 import AdminProfile from "./components/admin/AdminProfile";
 import AdminInvestmentManagement from "./components/admin/AdminInvestmentManagement";
 import AdminPartnershipManagement from "./components/admin/AdminPartnershipManagement";
+import AdminHouseModelsManagement from "./components/admin/AdminHouseModelsManagement";
 import DashboardManager from "./components/manager/DashboardManager";
 import PropertyManagementManager from "./components/manager/PropertyManagement";
 import ManagerAssignments from "./components/manager/ManagerAssignments";
@@ -124,6 +125,14 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
                   <AdminInvestmentManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/house-models"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
+                  <AdminHouseModelsManagement />
                 </ProtectedRoute>
               }
             />

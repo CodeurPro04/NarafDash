@@ -31,6 +31,7 @@ const Sidebar = () => {
       { path: '/admin/properties', icon: Building, label: 'Proprietes' },
       { path: '/admin/construction-projects', icon: HardHat, label: 'Construction' },
        { path: '/admin/investments', icon: TrendingUp, label: 'Investissements' },
+      { path: '/admin/house-models', icon: Building, label: 'Modeles maison' },
       { path: '/admin/assignments', icon: UserCheck, label: 'Assignations' },
       { path: '/admin/clients', icon: Users, label: 'Clients' },
       { path: '/admin/messages', icon: MessageSquare, label: 'Messages' },
