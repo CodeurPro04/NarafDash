@@ -494,6 +494,10 @@ export const agentService = {
   getAssignedClientRequests: () =>
     api.get("/v1/agent/client-requests/assigned"),
   getClientRequestHistory: () => api.get("/v1/agent/client-requests/history"),
+  approveClientRequest: (uuid) =>
+    api.post(`/v1/agent/client-requests/${uuid}/approve`),
+  rejectClientRequest: (uuid, data) =>
+    api.post(`/v1/agent/client-requests/${uuid}/reject`, data),
 
   // Projets d'investissement (agent)
   getInvestmentPublications: () =>
@@ -609,3 +613,4 @@ export const companyService = {
 };
 
 export default api;
+

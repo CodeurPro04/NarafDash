@@ -5,11 +5,12 @@ import { agentService } from '../../services/api';
 import { CheckCircle, Clock, MessageSquare, Building, Mail, ArrowUpRight, Archive, FileText, HardHat, Send, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { normalizeAgentType } from '../../utils/agentType';
 
 const DashboardAgent = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const agentType = (user?.agent_type || user?.agentType || 'immobilier').toLowerCase();
+  const agentType = normalizeAgentType(user?.agent_type || user?.agentType || 'immobilier');
   const [stats, setStats] = useState({
     propertiesToValidate: 0,
     validatedProperties: 0,
@@ -501,4 +502,5 @@ const DashboardAgent = () => {
 };
 
 export default DashboardAgent;
+
 

@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { ROLES } from '../../utils/roles';
+import { normalizeAgentType } from '../../utils/agentType';
 import {
   LayoutDashboard,
   Users,
@@ -30,7 +31,7 @@ const Sidebar = () => {
       { path: '/admin/users', icon: Users, label: 'Utilisateurs' },
       { path: '/admin/properties', icon: Building, label: 'Proprietes' },
       { path: '/admin/construction-projects', icon: HardHat, label: 'Construction' },
-       { path: '/admin/investments', icon: TrendingUp, label: 'Investissements' },
+      { path: '/admin/investments', icon: TrendingUp, label: 'Investissements' },
       { path: '/admin/house-models', icon: Building, label: 'Modeles maison' },
       { path: '/admin/assignments', icon: UserCheck, label: 'Assignations' },
       { path: '/admin/clients', icon: Users, label: 'Clients' },
@@ -50,10 +51,11 @@ const Sidebar = () => {
       { path: '/manager/profile', icon: Shield, label: 'Profil' },
     ],
     [ROLES.AGENT]: (() => {
-      const agentType = (user?.agent_type || user?.agentType || '').toLowerCase();
+      const agentType = normalizeAgentType(user?.agent_type || user?.agentType);
       const baseItems = [
         { path: '/agent/dashboard', icon: LayoutDashboard, label: 'Tableau de bord' },
         { path: '/agent/assigned', icon: UserCheck, label: 'Assignations' },
+        
       ];
 
       if (agentType === 'constructeur') {
@@ -78,6 +80,7 @@ const Sidebar = () => {
       return [
         ...baseItems,
         { path: '/agent/properties', icon: CheckCircle, label: 'Validation' },
+        { path: '/agent/search-requests', icon: Search, label: 'Recherches' },
         { path: '/agent/all-properties', icon: Building, label: 'Proprietes' },
         { path: '/agent/messages', icon: MessageSquare, label: 'Messages' },
         { path: '/agent/profile', icon: Shield, label: 'Profil' },
@@ -100,7 +103,8 @@ const Sidebar = () => {
     ],
   };
 
-  const currentMenu = menuItems[user?.role] || [];
+  const currentRole = user?.role?.slug || user?.role;
+  const currentMenu = menuItems[currentRole] || [];
 
   return (
     <aside className="hidden lg:flex flex-col w-72 min-h-screen bg-[rgb(var(--ink))] text-[rgb(var(--paper))] border-r border-[rgba(255,253,250,0.08)]">
@@ -149,3 +153,4 @@ const Sidebar = () => {
 };
 
 export default Sidebar;
+

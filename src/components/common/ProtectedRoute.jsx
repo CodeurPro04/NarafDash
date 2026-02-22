@@ -1,6 +1,7 @@
 import React from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import { normalizeAgentType } from "../../utils/agentType";
 
 const ProtectedRoute = ({
   children,
@@ -31,8 +32,9 @@ const ProtectedRoute = ({
   if (allowedAgentTypes.length > 0) {
     const userRole = user.role?.slug || user.role;
     if (userRole === "agent") {
-      const agentType = (user.agent_type || user.agentType || "").toLowerCase();
-      if (!allowedAgentTypes.includes(agentType)) {
+      const agentType = normalizeAgentType(user.agent_type || user.agentType);
+      const normalizedAllowed = allowedAgentTypes.map((type) => normalizeAgentType(type));
+      if (!normalizedAllowed.includes(agentType)) {
         return <Navigate to="/agent/dashboard" />;
       }
     }

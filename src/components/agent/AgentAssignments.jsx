@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
 import { agentService } from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
+import { normalizeAgentType } from '../../utils/agentType';
 import {
   ClipboardList,
   Building,
@@ -12,6 +14,8 @@ import {
 } from 'lucide-react';
 
 const AgentAssignments = () => {
+  const { user } = useAuth();
+  const agentType = normalizeAgentType(user?.agent_type || user?.agentType);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -21,54 +25,56 @@ const AgentAssignments = () => {
   const [constructionProjects, setConstructionProjects] = useState([]);
   const [clientRequests, setClientRequests] = useState([]);
   const [clientHistory, setClientHistory] = useState([]);
+  const [processingClientUuid, setProcessingClientUuid] = useState('');
   const [activeTab, setActiveTab] = useState('clients');
   const [reasonModal, setReasonModal] = useState({ open: false, title: '', reason: '' });
+  const [rejectModal, setRejectModal] = useState({ open: false, uuid: '', reason: '', error: '' });
 
   const extractPayload = (response) => response?.data?.data ?? response?.data ?? [];
 
   useEffect(() => {
     loadAll();
-  }, []);
+  }, [agentType]);
 
   const loadAll = async () => {
-    try {
-      setLoading(true);
-      setError('');
-      const [
-        propertiesRes,
-        propertyReqRes,
-        searchRes,
-        constructionRes,
-        clientRes,
-        clientHistoryRes,
-      ] = await Promise.all([
-        agentService.getAssignedProperties(),
-        agentService.getAssignedPropertyRequests(),
-        agentService.getAssignedSearchRequests(),
-        agentService.getAssignedConstructionProjects(),
-        agentService.getAssignedClientRequests(),
-        agentService.getClientRequestHistory(),
-      ]);
+    setLoading(true);
+    setError('');
 
-      const propertiesPayload = extractPayload(propertiesRes);
-      const propertyReqPayload = extractPayload(propertyReqRes);
-      const searchPayload = extractPayload(searchRes);
-      const constructionPayload = extractPayload(constructionRes);
-      const clientPayload = extractPayload(clientRes);
-      const clientHistoryPayload = extractPayload(clientHistoryRes);
+    const jobs = [
+      { key: 'properties', run: () => agentService.getAssignedProperties() },
+      { key: 'propertyRequests', run: () => agentService.getAssignedPropertyRequests() },
+      { key: 'searchRequests', run: () => agentService.getAssignedSearchRequests() },
+      { key: 'constructionProjects', run: () => agentService.getAssignedConstructionProjects() },
+      { key: 'clientRequests', run: () => agentService.getAssignedClientRequests() },
+      { key: 'clientHistory', run: () => agentService.getClientRequestHistory() },
+    ];
 
-      setAssignedProperties(Array.isArray(propertiesPayload.data || propertiesPayload) ? (propertiesPayload.data || propertiesPayload) : []);
-      setPropertyRequests(Array.isArray(propertyReqPayload.data || propertyReqPayload) ? (propertyReqPayload.data || propertyReqPayload) : []);
-      setSearchRequests(Array.isArray(searchPayload.data || searchPayload) ? (searchPayload.data || searchPayload) : []);
-      setConstructionProjects(Array.isArray(constructionPayload.data || constructionPayload) ? (constructionPayload.data || constructionPayload) : []);
-      setClientRequests(Array.isArray(clientPayload.data || clientPayload) ? (clientPayload.data || clientPayload) : []);
-      setClientHistory(Array.isArray(clientHistoryPayload.data || clientHistoryPayload) ? (clientHistoryPayload.data || clientHistoryPayload) : []);
-    } catch (err) {
-      console.error('Erreur chargement assignations agent:', err);
-      setError('Impossible de charger les assignations.');
-    } finally {
-      setLoading(false);
+    const settled = await Promise.allSettled(jobs.map((job) => job.run()));
+
+    const failedKeys = [];
+    const readList = (result, key) => {
+      if (result.status !== 'fulfilled') {
+        failedKeys.push(key);
+        return [];
+      }
+      const payload = extractPayload(result.value);
+      const list = payload?.data || payload;
+      return Array.isArray(list) ? list : [];
+    };
+
+    setAssignedProperties(readList(settled[0], jobs[0].key));
+    setPropertyRequests(readList(settled[1], jobs[1].key));
+    setSearchRequests(readList(settled[2], jobs[2].key));
+    setConstructionProjects(readList(settled[3], jobs[3].key));
+    setClientRequests(readList(settled[4], jobs[4].key));
+    setClientHistory(readList(settled[5], jobs[5].key));
+
+    if (failedKeys.length > 0) {
+      console.error('Erreur chargement partiel assignations agent:', failedKeys);
+      setError('Certaines sections n\'ont pas pu etre chargees.');
     }
+
+    setLoading(false);
   };
 
   const propertyPendingCount = useMemo(
@@ -132,6 +138,47 @@ const AgentAssignments = () => {
     return 'En attente';
   };
 
+  const handleApproveClient = async (uuid) => {
+    try {
+      setProcessingClientUuid(uuid);
+      await agentService.approveClientRequest(uuid);
+      await loadAll();
+    } catch (err) {
+      console.error('Erreur approbation client:', err);
+      setError(err.response?.data?.message || 'Impossible d\'approuver cette demande client.');
+    } finally {
+      setProcessingClientUuid('');
+    }
+  };
+
+  const openRejectModal = (uuid) => {
+    setRejectModal({ open: true, uuid, reason: '', error: '' });
+  };
+
+  const closeRejectModal = () => {
+    if (processingClientUuid) return;
+    setRejectModal({ open: false, uuid: '', reason: '', error: '' });
+  };
+
+  const submitRejectClient = async () => {
+    const reason = rejectModal.reason.trim();
+    if (!reason) {
+      setRejectModal((prev) => ({ ...prev, error: 'Le motif du refus est obligatoire.' }));
+      return;
+    }
+
+    try {
+      setProcessingClientUuid(rejectModal.uuid);
+      await agentService.rejectClientRequest(rejectModal.uuid, { rejection_reason: reason });
+      await loadAll();
+      setRejectModal({ open: false, uuid: '', reason: '', error: '' });
+    } catch (err) {
+      console.error('Erreur refus client:', err);
+      setError(err.response?.data?.message || 'Impossible de refuser cette demande client.');
+    } finally {
+      setProcessingClientUuid('');
+    }
+  };
   const openReasonModal = (title, reason) => {
     setReasonModal({ open: true, title, reason });
   };
@@ -216,7 +263,27 @@ const AgentAssignments = () => {
                           </div>
                           <div>Decision: {decisionLabel(item.status)}</div>
                         </div>
-                        {item.status === 'rejected' && item.rejection_reason && (
+                        {item.status === 'assigned' && (
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              className="btn-primary"
+                              disabled={processingClientUuid === item.uuid}
+                              onClick={() => handleApproveClient(item.uuid)}
+                            >
+                              {processingClientUuid === item.uuid ? 'Traitement...' : 'Accepter'}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn-ghost"
+                              disabled={processingClientUuid === item.uuid}
+                              onClick={() => openRejectModal(item.uuid)}
+                            >
+                              Refuser
+                            </button>
+                          </div>
+                        )}
+                        {['rejected', 'agent_rejected'].includes(item.status) && item.rejection_reason && (
                           <button
                             type="button"
                             className="btn-ghost text-[rgb(var(--clay))]"
@@ -304,7 +371,8 @@ const AgentAssignments = () => {
                           Budget: {item.budget_min ? Number(item.budget_min).toLocaleString() : 'N/A'} - {item.budget_max ? Number(item.budget_max).toLocaleString() : 'N/A'}
                         </div>
                         <div className="text-xs text-[rgba(15,42,46,0.5)]">Decision: {decisionLabel(item.status)}</div>
-                        {item.status === 'rejected' && item.rejection_reason && (
+                        
+                        {['rejected', 'agent_rejected'].includes(item.status) && item.rejection_reason && (
                           <button
                             type="button"
                             className="btn-ghost text-[rgb(var(--clay))]"
@@ -334,7 +402,8 @@ const AgentAssignments = () => {
                           {item.city || item.location || 'Localisation'} | Budget {item.budget_min ? Number(item.budget_min).toLocaleString() : 'N/A'}
                         </p>
                         <div className="text-xs text-[rgba(15,42,46,0.5)]">Decision: {decisionLabel(item.status)}</div>
-                        {item.status === 'rejected' && item.rejection_reason && (
+                        
+                        {['rejected', 'agent_rejected'].includes(item.status) && item.rejection_reason && (
                           <button
                             type="button"
                             className="btn-ghost text-[rgb(var(--clay))]"
@@ -365,7 +434,8 @@ const AgentAssignments = () => {
                             </div>
                             <p className="text-xs text-[rgba(15,42,46,0.55)] break-words">{item.message}</p>
                             <div className="text-xs text-[rgba(15,42,46,0.5)]">Decision: {decisionLabel(item.status)}</div>
-                            {item.status === 'rejected' && item.rejection_reason && (
+                            
+                        {['rejected', 'agent_rejected'].includes(item.status) && item.rejection_reason && (
                               <button
                                 type="button"
                                 className="btn-ghost text-[rgb(var(--clay))]"
@@ -393,7 +463,8 @@ const AgentAssignments = () => {
                               {item.city || item.location || 'Localisation'}
                             </p>
                             <div className="text-xs text-[rgba(15,42,46,0.5)]">Decision: {decisionLabel(item.status)}</div>
-                            {item.status === 'rejected' && item.rejection_reason && (
+                            
+                        {['rejected', 'agent_rejected'].includes(item.status) && item.rejection_reason && (
                               <button
                                 type="button"
                                 className="btn-ghost text-[rgb(var(--clay))]"
@@ -433,8 +504,51 @@ const AgentAssignments = () => {
           </div>
         </div>
       )}
+
+      {rejectModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold">Motif du refus</h3>
+            <p className="mt-2 text-sm text-[rgba(15,42,46,0.6)]">
+              Ce motif sera enregistre avec la decision de refus.
+            </p>
+            <textarea
+              value={rejectModal.reason}
+              onChange={(e) => setRejectModal((prev) => ({ ...prev, reason: e.target.value, error: '' }))}
+              rows={4}
+              placeholder="Saisissez le motif du refus..."
+              className="mt-4 w-full rounded-xl border border-[rgb(var(--line))] px-3 py-2 text-sm outline-none focus:border-[rgb(var(--ink))]"
+            />
+            {rejectModal.error && (
+              <p className="mt-2 text-xs text-[rgb(var(--clay))]">{rejectModal.error}</p>
+            )}
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                className="btn-ghost"
+                onClick={closeRejectModal}
+                disabled={Boolean(processingClientUuid)}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={submitRejectClient}
+                disabled={Boolean(processingClientUuid)}
+              >
+                {processingClientUuid ? 'Traitement...' : 'Confirmer le refus'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default AgentAssignments;
+
+
+
+
