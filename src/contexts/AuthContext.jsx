@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import { authService, profileService } from "../services/api";
 
 const AuthContext = createContext();
@@ -19,26 +19,33 @@ export const AuthProvider = ({ children }) => {
     checkAuthStatus();
   }, []);
 
+  const clearStoredSession = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+  };
+
   const checkAuthStatus = async () => {
     try {
       const token = localStorage.getItem("token");
       const storedUser = localStorage.getItem("user");
 
       if (token && storedUser) {
-        // Vérifier si le token est toujours valide et rafraichir l'utilisateur
         const profileResponse = await profileService.getProfile();
         const freshUser = profileResponse?.data?.data?.user;
         const fallbackUser = JSON.parse(storedUser);
         const nextUser = freshUser || fallbackUser;
-        setUser(nextUser);
-        if (nextUser) {
+
+        if (nextUser?.is_active === false) {
+          clearStoredSession();
+          setUser(null);
+        } else {
+          setUser(nextUser);
           localStorage.setItem("user", JSON.stringify(nextUser));
         }
       }
     } catch (error) {
-      // Token invalide, nettoyer le stockage
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
+      clearStoredSession();
+      setUser(null);
     } finally {
       setLoading(false);
     }
@@ -48,6 +55,16 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await authService.login({ email, password });
       const { user: userData, token } = response.data.data;
+
+      if (userData?.is_active === false) {
+        clearStoredSession();
+        setUser(null);
+        return {
+          success: false,
+          error:
+            "Votre compte est en attente d'activation. L'acces au backoffice sera disponible apres validation par un administrateur.",
+        };
+      }
 
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(userData));
@@ -66,11 +83,10 @@ export const AuthProvider = ({ children }) => {
     try {
       await authService.logout();
     } catch (error) {
-      console.error("Erreur lors de la déconnexion:", error);
+      console.error("Erreur lors de la deconnexion:", error);
     } finally {
       setUser(null);
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
+      clearStoredSession();
       window.location.href = "/";
     }
   };

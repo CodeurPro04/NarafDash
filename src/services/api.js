@@ -195,6 +195,8 @@ export const adminService = {
 
   // Modeles de maison
   getHouseModels: () => api.get("/v1/admin/house-models"),
+  updateHouseModelsSection: (data) =>
+    api.post("/v1/admin/house-models/section", data),
   createHouseModel: (data) =>
     api.post(
       "/v1/admin/house-models",
@@ -286,6 +288,8 @@ export const adminService = {
     api.post(`/v1/admin/construction/${uuid}/approve`),
   rejectConstructionProject: (uuid, data) =>
     api.post(`/v1/admin/construction/${uuid}/reject`, data),
+  updateConstructionSpotlight: (data) =>
+    api.post("/v1/admin/construction/spotlight", data),
   createConstructionProject: (data) =>
     api.post(
       "/v1/admin/construction",

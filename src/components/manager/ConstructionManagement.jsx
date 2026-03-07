@@ -27,6 +27,16 @@ const ConstructionManagement = () => {
   const [selectedProject, setSelectedProject] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [listSearchTerm, setListSearchTerm] = useState('');
+  const [spotlightSaving, setSpotlightSaving] = useState(false);
+  const [spotlightForm, setSpotlightForm] = useState({
+    section_title: 'Ne ratez pas cette offre exceptionnelle',
+    section_description:
+      'Deux offres speciales en video pour vous aider a lancer votre projet au meilleur moment.',
+    videos: [
+      { url: '', title: '', description: '' },
+      { url: '', title: '', description: '' },
+    ],
+  });
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -71,6 +81,24 @@ const ConstructionManagement = () => {
       const publishedPayload = publishedRes?.data?.data ?? publishedRes?.data ?? [];
       const publishedList = publishedPayload.data || publishedPayload;
       setProjects(Array.isArray(publishedList) ? publishedList : []);
+      const spotlight = publishedRes?.data?.spotlight;
+      if (spotlight) {
+        const normalizedVideos = Array.isArray(spotlight.videos) ? spotlight.videos.slice(0, 2) : [];
+        while (normalizedVideos.length < 2) {
+          normalizedVideos.push({ url: '', title: '', description: '' });
+        }
+        setSpotlightForm({
+          section_title: spotlight.title || 'Ne ratez pas cette offre exceptionnelle',
+          section_description:
+            spotlight.description ||
+            'Deux offres speciales en video pour vous aider a lancer votre projet au meilleur moment.',
+          videos: normalizedVideos.map((video) => ({
+            url: video?.url || '',
+            title: video?.title || '',
+            description: video?.description || '',
+          })),
+        });
+      }
 
       const pendingPayload = pendingRes?.data?.data ?? pendingRes?.data ?? [];
       const pendingList = pendingPayload.data || pendingPayload;
@@ -210,6 +238,61 @@ const ConstructionManagement = () => {
     }
   };
 
+  const handleSpotlightChange = (field, value) => {
+    setSpotlightForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSpotlightVideoChange = (index, field, value) => {
+    setSpotlightForm((prev) => ({
+      ...prev,
+      videos: prev.videos.map((video, videoIndex) =>
+        videoIndex === index ? { ...video, [field]: value } : video,
+      ),
+    }));
+  };
+
+  const handleSpotlightSubmit = async (event) => {
+    event.preventDefault();
+    if (user?.role !== 'admin') return;
+    setSpotlightSaving(true);
+    setError('');
+
+    try {
+      const payload = {
+        section_title: spotlightForm.section_title,
+        section_description: spotlightForm.section_description,
+        videos: spotlightForm.videos.filter(
+          (video) => video.url.trim() && video.title.trim() && video.description.trim(),
+        ),
+      };
+
+      if (payload.videos.length !== 2) {
+        setError('Veuillez renseigner exactement deux videos avec lien, titre et description.');
+        setSpotlightSaving(false);
+        return;
+      }
+
+      const response = await adminService.updateConstructionSpotlight(payload);
+      const spotlight = response?.data?.spotlight;
+      if (spotlight) {
+        setSpotlightForm({
+          section_title: spotlight.title || '',
+          section_description: spotlight.description || '',
+          videos: (spotlight.videos || []).slice(0, 2).map((video) => ({
+            url: video?.url || '',
+            title: video?.title || '',
+            description: video?.description || '',
+          })),
+        });
+      }
+    } catch (err) {
+      console.error('Erreur enregistrement spotlight construction:', err);
+      setError(err.response?.data?.message || 'Erreur lors de l’enregistrement du contenu video.');
+    } finally {
+      setSpotlightSaving(false);
+    }
+  };
+
   const getCoverImage = (project) => {
     const images = Array.isArray(project?.images_path) ? project.images_path : [];
     if (images.length === 0) return '';
@@ -286,6 +369,80 @@ const ConstructionManagement = () => {
 
             {error && (
               <div className="surface-panel p-4 text-sm text-[rgb(var(--clay))]">{error}</div>
+            )}
+
+            {user?.role === 'admin' && (
+              <form onSubmit={handleSpotlightSubmit} className="surface-panel p-6 space-y-5">
+                <div>
+                  <h2 className="text-lg font-semibold">Section video publique construction</h2>
+                  <p className="text-sm text-[rgba(15,42,46,0.6)] mt-1">
+                    Configurez le titre, la description et les deux videos maximum affichees dans la page Construction.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Titre de section</label>
+                    <input
+                      value={spotlightForm.section_title}
+                      onChange={(e) => handleSpotlightChange('section_title', e.target.value)}
+                      className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Description de section</label>
+                    <textarea
+                      rows="3"
+                      value={spotlightForm.section_description}
+                      onChange={(e) => handleSpotlightChange('section_description', e.target.value)}
+                      className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {spotlightForm.videos.map((video, index) => (
+                      <div key={`spotlight-video-${index}`} className="surface-soft rounded-2xl p-4 space-y-3">
+                        <h3 className="text-sm font-semibold">Video {index + 1}</h3>
+                        <div>
+                          <label className="block text-sm font-medium mb-2">Lien video</label>
+                          <input
+                            value={video.url}
+                            onChange={(e) => handleSpotlightVideoChange(index, 'url', e.target.value)}
+                            placeholder="https://www.youtube.com/watch?v=..."
+                            className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-2">Titre video</label>
+                          <input
+                            value={video.title}
+                            onChange={(e) => handleSpotlightVideoChange(index, 'title', e.target.value)}
+                            className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-2">Description video</label>
+                          <textarea
+                            rows="3"
+                            value={video.description}
+                            onChange={(e) => handleSpotlightVideoChange(index, 'description', e.target.value)}
+                            className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
+                            required
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <button type="submit" className="btn-primary" disabled={spotlightSaving}>
+                    <Save className="h-4 w-4" />
+                    {spotlightSaving ? 'Enregistrement...' : 'Enregistrer la section video'}
+                  </button>
+                </div>
+              </form>
             )}
 
             {!isCreateOnlyView && !isListOnlyView && (

@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { Plus, Save, Trash2 } from "lucide-react";
 import Header from "../common/Header";
 import Sidebar from "../common/Sidebar";
 import { adminService } from "../../services/api";
-import { Plus, Save, Trash2 } from "lucide-react";
 
 const emptyForm = {
   title: "",
@@ -12,10 +12,17 @@ const emptyForm = {
   is_active: true,
 };
 
+const defaultSectionForm = {
+  title: "",
+  description: "",
+  videos: [""],
+};
+
 const AdminHouseModelsManagement = () => {
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [sectionSaving, setSectionSaving] = useState(false);
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingModel, setEditingModel] = useState(null);
@@ -25,6 +32,7 @@ const AdminHouseModelsManagement = () => {
   const [existingGallery, setExistingGallery] = useState([]);
   const [removeGallery, setRemoveGallery] = useState([]);
   const [removeCover, setRemoveCover] = useState(false);
+  const [sectionForm, setSectionForm] = useState(defaultSectionForm);
 
   const sortedModels = useMemo(
     () =>
@@ -42,9 +50,19 @@ const AdminHouseModelsManagement = () => {
       setLoading(true);
       setError("");
       const response = await adminService.getHouseModels();
-      const payload = response?.data?.data ?? response?.data ?? [];
-      const list = payload?.data || payload;
+      const payload = response?.data ?? {};
+      const list = payload?.data || [];
       setModels(Array.isArray(list) ? list : []);
+      setSectionForm({
+        title: payload?.section?.title || "Modeles de maison",
+        description:
+          payload?.section?.description ||
+          "Decouvrez nos modeles de maison, penses pour allier style, confort et fonctionnalite dans chaque projet.",
+        videos:
+          Array.isArray(payload?.section?.videos) && payload.section.videos.length
+            ? payload.section.videos
+            : [""],
+      });
     } catch (err) {
       console.error("Erreur chargement modeles:", err);
       setError("Impossible de charger les modeles.");
@@ -130,7 +148,9 @@ const AdminHouseModelsManagement = () => {
       resetForm();
     } catch (err) {
       console.error("Erreur enregistrement modele:", err);
-      setError(err?.response?.data?.message || "Erreur lors de l'enregistrement.");
+      setError(
+        err?.response?.data?.message || "Erreur lors de l'enregistrement.",
+      );
     } finally {
       setSaving(false);
     }
@@ -151,26 +171,184 @@ const AdminHouseModelsManagement = () => {
 
   const toggleGalleryRemoval = (path) => {
     setRemoveGallery((prev) =>
-      prev.includes(path) ? prev.filter((item) => item !== path) : [...prev, path],
+      prev.includes(path)
+        ? prev.filter((item) => item !== path)
+        : [...prev, path],
     );
+  };
+
+  const handleSectionSubmit = async (event) => {
+    event.preventDefault();
+    setSectionSaving(true);
+    setError("");
+
+    try {
+      const response = await adminService.updateHouseModelsSection({
+        section_title: sectionForm.title,
+        section_description: sectionForm.description,
+        video_urls: sectionForm.videos.filter((video) =>
+          String(video || "").trim(),
+        ),
+      });
+      const section = response?.data?.section;
+      if (section) {
+        setSectionForm({
+          title: section.title || "",
+          description: section.description || "",
+          videos:
+            Array.isArray(section.videos) && section.videos.length
+              ? section.videos
+              : [""],
+        });
+      }
+    } catch (err) {
+      console.error("Erreur enregistrement section modeles:", err);
+      setError(
+        err?.response?.data?.message ||
+          "Erreur lors de l'enregistrement de la section.",
+      );
+    } finally {
+      setSectionSaving(false);
+    }
   };
 
   return (
     <div className="app-shell flex">
       <Sidebar />
-      <div className="flex-1 flex flex-col">
+      <div className="flex flex-1 flex-col">
         <Header />
         <main className="flex-1 px-6 py-8">
-          <div className="max-w-7xl mx-auto space-y-6">
+          <div className="mx-auto max-w-7xl space-y-6">
             <div>
               <p className="chip">Administration</p>
-              <h1 className="text-3xl font-semibold mt-3">Modeles de maison</h1>
-              <p className="text-sm text-[rgba(15,42,46,0.6)] mt-2">
-                Gelez la section publique "Nos Services" et les pages de details des modeles.
+              <h1 className="mt-3 text-3xl font-semibold">Modeles de maison</h1>
+              <p className="mt-2 text-sm text-[rgba(15,42,46,0.6)]">
+                Gere la section publique des modeles et les videos affichees sous
+                cette section sur la page d'accueil.
               </p>
             </div>
 
-            {error && <div className="surface-panel p-4 text-sm text-[rgb(var(--clay))]">{error}</div>}
+            {error && (
+              <div className="surface-panel p-4 text-sm text-[rgb(var(--clay))]">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSectionSubmit} className="surface-panel space-y-5 p-6">
+              <div>
+                <h2 className="text-lg font-semibold">
+                  Contenu de la section publique
+                </h2>
+                <p className="mt-1 text-sm text-[rgba(15,42,46,0.6)]">
+                  Ce contenu s'affiche au-dessus des modeles de maison, ainsi que
+                  dans la section video situee juste en dessous.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <label className="mb-2 block text-sm font-medium">
+                    Titre de section
+                  </label>
+                  <input
+                    required
+                    value={sectionForm.title}
+                    onChange={(e) =>
+                      setSectionForm((prev) => ({
+                        ...prev,
+                        title: e.target.value,
+                      }))
+                    }
+                    className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium">
+                    Paragraphe de section
+                  </label>
+                  <textarea
+                    required
+                    rows="4"
+                    value={sectionForm.description}
+                    onChange={(e) =>
+                      setSectionForm((prev) => ({
+                        ...prev,
+                        description: e.target.value,
+                      }))
+                    }
+                    className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <label className="block text-sm font-medium">
+                      Liens videos
+                    </label>
+                    <button
+                      type="button"
+                      className="btn-ghost"
+                      onClick={() =>
+                        setSectionForm((prev) => ({
+                          ...prev,
+                          videos: [...prev.videos, ""],
+                        }))
+                      }
+                    >
+                      <Plus className="h-4 w-4" />
+                      Ajouter un lien
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    {sectionForm.videos.map((video, index) => (
+                      <div key={`section-video-${index}`} className="flex gap-3">
+                        <input
+                          value={video}
+                          onChange={(e) =>
+                            setSectionForm((prev) => ({
+                              ...prev,
+                              videos: prev.videos.map((item, itemIndex) =>
+                                itemIndex === index ? e.target.value : item,
+                              ),
+                            }))
+                          }
+                          placeholder="https://www.youtube.com/watch?v=..."
+                          className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
+                        />
+                        {sectionForm.videos.length > 1 && (
+                          <button
+                            type="button"
+                            className="btn-ghost text-[rgb(var(--clay))]"
+                            onClick={() =>
+                              setSectionForm((prev) => ({
+                                ...prev,
+                                videos: prev.videos.filter(
+                                  (_, itemIndex) => itemIndex !== index,
+                                ),
+                              }))
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-xs text-[rgba(15,42,46,0.55)]">
+                    Ajoutez un ou plusieurs liens video YouTube ou Vimeo. Vous
+                    pourrez les modifier a tout moment.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <button type="submit" className="btn-primary" disabled={sectionSaving}>
+                  <Save className="h-4 w-4" />
+                  {sectionSaving ? "Enregistrement..." : "Enregistrer le contenu"}
+                </button>
+              </div>
+            </form>
 
             <div className="flex items-center justify-between">
               <div>
@@ -179,60 +357,89 @@ const AdminHouseModelsManagement = () => {
                   Ajoutez image, titre, description et ordre d'affichage.
                 </p>
               </div>
-              <button type="button" className="btn-primary" onClick={() => setShowForm((prev) => !prev)}>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => setShowForm((prev) => !prev)}
+              >
                 <Plus className="h-4 w-4" />
                 {showForm ? "Fermer le formulaire" : "Ajouter un modele"}
               </button>
             </div>
 
             {showForm && (
-              <form onSubmit={handleSubmit} className="surface-panel p-6 space-y-5">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <form onSubmit={handleSubmit} className="surface-panel space-y-5 p-6">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
-                    <label className="block text-sm font-medium mb-2">Titre</label>
+                    <label className="mb-2 block text-sm font-medium">Titre</label>
                     <input
                       required
                       value={formData.title}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, title: e.target.value }))
+                      }
                       className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-2">Ordre d'affichage</label>
+                    <label className="mb-2 block text-sm font-medium">
+                      Ordre d'affichage
+                    </label>
                     <input
                       type="number"
                       min="0"
                       value={formData.display_order}
                       onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, display_order: Number(e.target.value || 0) }))
+                        setFormData((prev) => ({
+                          ...prev,
+                          display_order: Number(e.target.value || 0),
+                        }))
                       }
                       className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-medium mb-2">Description courte</label>
+                    <label className="mb-2 block text-sm font-medium">
+                      Description courte
+                    </label>
                     <textarea
                       rows="3"
                       value={formData.short_description}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, short_description: e.target.value }))}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          short_description: e.target.value,
+                        }))
+                      }
                       className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
                     />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-medium mb-2">Description detaillee</label>
+                    <label className="mb-2 block text-sm font-medium">
+                      Description detaillee
+                    </label>
                     <textarea
                       rows="6"
                       value={formData.description}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          description: e.target.value,
+                        }))
+                      }
                       className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-2">Photo principale</label>
+                    <label className="mb-2 block text-sm font-medium">
+                      Photo principale
+                    </label>
                     <input
                       type="file"
                       accept="image/*"
-                      onChange={(e) => setCoverImageFile(e.target.files?.[0] || null)}
+                      onChange={(e) =>
+                        setCoverImageFile(e.target.files?.[0] || null)
+                      }
                       className="w-full text-sm"
                     />
                     {editingModel?.cover_image_url && (
@@ -240,7 +447,7 @@ const AdminHouseModelsManagement = () => {
                         <img
                           src={editingModel.cover_image_url}
                           alt={editingModel.title}
-                          className="h-24 w-40 object-cover rounded-xl border border-[rgb(var(--line))]"
+                          className="h-24 w-40 rounded-xl border border-[rgb(var(--line))] object-cover"
                         />
                         <label className="inline-flex items-center gap-2 text-xs">
                           <input
@@ -254,21 +461,30 @@ const AdminHouseModelsManagement = () => {
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-2">Photos galerie</label>
+                    <label className="mb-2 block text-sm font-medium">
+                      Photos galerie
+                    </label>
                     <input
                       type="file"
                       accept="image/*"
                       multiple
-                      onChange={(e) => setGalleryFiles(Array.from(e.target.files || []))}
+                      onChange={(e) =>
+                        setGalleryFiles(Array.from(e.target.files || []))
+                      }
                       className="w-full text-sm"
                     />
                   </div>
-                  <div className="md:col-span-2 flex items-center gap-2">
+                  <div className="flex items-center gap-2 md:col-span-2">
                     <input
                       id="is_active"
                       type="checkbox"
                       checked={formData.is_active}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, is_active: e.target.checked }))}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          is_active: e.target.checked,
+                        }))
+                      }
                     />
                     <label htmlFor="is_active" className="text-sm font-medium">
                       Actif sur le site public
@@ -278,11 +494,18 @@ const AdminHouseModelsManagement = () => {
 
                 {existingGallery.length > 0 && (
                   <div>
-                    <p className="text-sm font-medium mb-3">Galerie existante</p>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <p className="mb-3 text-sm font-medium">Galerie existante</p>
+                    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                       {existingGallery.map((item) => (
-                        <label key={item.path} className="surface-soft p-2 rounded-xl space-y-2">
-                          <img src={item.url} alt="Galerie" className="h-24 w-full object-cover rounded-lg" />
+                        <label
+                          key={item.path}
+                          className="surface-soft space-y-2 rounded-xl p-2"
+                        >
+                          <img
+                            src={item.url}
+                            alt="Galerie"
+                            className="h-24 w-full rounded-lg object-cover"
+                          />
                           <span className="inline-flex items-center gap-2 text-xs">
                             <input
                               type="checkbox"
@@ -315,16 +538,25 @@ const AdminHouseModelsManagement = () => {
               {loading ? (
                 <p className="text-sm text-[rgba(15,42,46,0.5)]">Chargement...</p>
               ) : sortedModels.length === 0 ? (
-                <p className="text-sm text-[rgba(15,42,46,0.5)]">Aucun modele cree.</p>
+                <p className="text-sm text-[rgba(15,42,46,0.5)]">
+                  Aucun modele cree.
+                </p>
               ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                   {sortedModels.map((model) => (
-                    <div key={model.uuid} className="surface-soft p-4 rounded-2xl space-y-4">
-                      <div className="h-48 rounded-xl overflow-hidden bg-[rgba(15,42,46,0.08)]">
+                    <div
+                      key={model.uuid}
+                      className="surface-soft space-y-4 rounded-2xl p-4"
+                    >
+                      <div className="h-48 overflow-hidden rounded-xl bg-[rgba(15,42,46,0.08)]">
                         {model.cover_image_url ? (
-                          <img src={model.cover_image_url} alt={model.title} className="h-full w-full object-cover" />
+                          <img
+                            src={model.cover_image_url}
+                            alt={model.title}
+                            className="h-full w-full object-cover"
+                          />
                         ) : (
-                          <div className="h-full w-full flex items-center justify-center text-sm text-[rgba(15,42,46,0.5)]">
+                          <div className="flex h-full w-full items-center justify-center text-sm text-[rgba(15,42,46,0.5)]">
                             Pas d'image
                           </div>
                         )}
@@ -332,20 +564,35 @@ const AdminHouseModelsManagement = () => {
                       <div>
                         <div className="flex items-center justify-between gap-3">
                           <h3 className="text-lg font-semibold">{model.title}</h3>
-                          <span className={`chip ${model.is_active ? "" : "bg-[rgba(15,42,46,0.12)] text-[rgba(15,42,46,0.65)]"}`}>
+                          <span
+                            className={`chip ${
+                              model.is_active
+                                ? ""
+                                : "bg-[rgba(15,42,46,0.12)] text-[rgba(15,42,46,0.65)]"
+                            }`}
+                          >
                             {model.is_active ? "Actif" : "Inactif"}
                           </span>
                         </div>
-                        <p className="text-sm text-[rgba(15,42,46,0.65)] mt-2 line-clamp-3">
+                        <p className="mt-2 line-clamp-3 text-sm text-[rgba(15,42,46,0.65)]">
                           {model.short_description || "Aucune description courte."}
                         </p>
                       </div>
                       <div className="flex items-center justify-between text-xs text-[rgba(15,42,46,0.55)]">
                         <span>Ordre: {model.display_order ?? 0}</span>
-                        <span>{Array.isArray(model.gallery_images) ? model.gallery_images.length : 0} photo(s) galerie</span>
+                        <span>
+                          {Array.isArray(model.gallery_images)
+                            ? model.gallery_images.length
+                            : 0}{" "}
+                          photo(s) galerie
+                        </span>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
-                        <button type="button" className="btn-ghost" onClick={() => handleEdit(model)}>
+                        <button
+                          type="button"
+                          className="btn-ghost"
+                          onClick={() => handleEdit(model)}
+                        >
                           Modifier
                         </button>
                         <button
@@ -370,4 +617,3 @@ const AdminHouseModelsManagement = () => {
 };
 
 export default AdminHouseModelsManagement;
-
