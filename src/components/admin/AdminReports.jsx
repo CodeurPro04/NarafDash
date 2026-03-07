@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
-import { managerService } from '../../services/api';
+import { adminService } from '../../services/api';
 import { Banknote, Building, HardHat, TrendingUp, UserCheck } from 'lucide-react';
 
 const parseAmount = (value) => {
@@ -37,7 +37,7 @@ const StatCard = ({ icon: Icon, label, value, note }) => (
   </div>
 );
 
-const ManagerReports = () => {
+const AdminReports = () => {
   const [deals, setDeals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -47,7 +47,7 @@ const ManagerReports = () => {
       try {
         setLoading(true);
         setError('');
-        const response = await managerService.getClientRequestHistory();
+        const response = await adminService.getClientRequestHistory();
         const payload = response?.data?.data ?? response?.data ?? [];
         const items = payload?.data || payload;
         const list = Array.isArray(items) ? items : [];
@@ -69,7 +69,7 @@ const ManagerReports = () => {
 
         setDeals(concludedDeals);
       } catch (err) {
-        console.error('Erreur lors du chargement des gains:', err);
+        console.error('Erreur lors du chargement des gains admin:', err);
         setError('Impossible de charger les gains.');
       } finally {
         setLoading(false);
@@ -104,10 +104,10 @@ const ManagerReports = () => {
         <main className="flex-1 px-6 py-8">
           <div className="max-w-7xl mx-auto space-y-6">
             <div>
-              <p className="chip">Gestionnaire</p>
+              <p className="chip">Administration</p>
               <h1 className="text-3xl font-semibold mt-3">Gains</h1>
               <p className="text-sm text-[rgba(15,42,46,0.6)] mt-2">
-                Suivi des gains generes a partir des offres conclues et des prix finaux renseignes par les agents.
+                Vue globale des gains generes a partir des offres conclues et des prix finaux renseignes par les agents.
               </p>
             </div>
 
@@ -249,4 +249,4 @@ const ManagerReports = () => {
   );
 };
 
-export default ManagerReports;
+export default AdminReports;

@@ -18,6 +18,7 @@ import AdminProfile from "./components/admin/AdminProfile";
 import AdminInvestmentManagement from "./components/admin/AdminInvestmentManagement";
 import AdminPartnershipManagement from "./components/admin/AdminPartnershipManagement";
 import AdminHouseModelsManagement from "./components/admin/AdminHouseModelsManagement";
+import AdminReports from "./components/admin/AdminReports";
 import DashboardManager from "./components/manager/DashboardManager";
 import PropertyManagementManager from "./components/manager/PropertyManagement";
 import ManagerAssignments from "./components/manager/ManagerAssignments";
@@ -125,6 +126,14 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
                   <AdminInvestmentManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/reports"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
+                  <AdminReports />
                 </ProtectedRoute>
               }
             />
@@ -279,7 +288,7 @@ function App() {
               element={
                 <ProtectedRoute
                   allowedRoles={[ROLES.AGENT]}
-                  allowedAgentTypes={["immobilier"]}
+                  allowedAgentTypes={["immobilier", "constructeur", "investissement"]}
                 >
                   <AgentSearchRequests />
                 </ProtectedRoute>

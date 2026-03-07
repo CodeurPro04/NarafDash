@@ -14,6 +14,18 @@ const PropertyValidation = () => {
   const [actionLoading, setActionLoading] = useState(false);
 
   const extractPayload = (response) => response?.data?.data ?? response?.data ?? [];
+  const requestStatusLabel = (status) => {
+    const labels = {
+      pending: 'En attente',
+      assigned: 'Assignee',
+      agent_approved: 'Acceptee par l agent',
+      agent_rejected: 'Refusee par l agent',
+      approved: 'Approuvee',
+      rejected: 'Refusee',
+    };
+
+    return labels[status || 'pending'] || status || 'En attente';
+  };
 
   useEffect(() => {
     loadPropertyRequests();
@@ -127,7 +139,7 @@ const PropertyValidation = () => {
                             {request.user ? `${request.user.first_name} ${request.user.last_name}` : 'Proprietaire'}
                           </p>
                           <p className="text-xs text-[rgba(15,42,46,0.5)]">
-                            Statut: {request.status || 'pending'}
+                            Statut: {requestStatusLabel(request.status)}
                           </p>
                         </div>
                         <span className="chip">Demande</span>

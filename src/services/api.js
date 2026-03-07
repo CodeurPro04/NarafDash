@@ -141,8 +141,22 @@ export const adminService = {
   getAllProperties: (params) => api.get("/v1/admin/properties/all", { params }),
   getProperties: (params) => api.get("/v1/admin/properties", { params }),
   getProperty: (uuid) => api.get(`/v1/admin/properties/${uuid}`),
-  createProperty: (data) => api.post("/v1/admin/properties", data),
-  updateProperty: (uuid, data) => api.put(`/v1/admin/properties/${uuid}`, data),
+  createProperty: (data) =>
+    api.post(
+      "/v1/admin/properties",
+      data,
+      data instanceof FormData
+        ? { headers: { "Content-Type": "multipart/form-data" } }
+        : undefined,
+    ),
+  updateProperty: (uuid, data) =>
+    api.put(
+      `/v1/admin/properties/${uuid}`,
+      data,
+      data instanceof FormData
+        ? { headers: { "Content-Type": "multipart/form-data" } }
+        : undefined,
+    ),
   deleteProperty: (uuid) => api.delete(`/v1/admin/properties/${uuid}`),
   forceDeleteProperty: (uuid) => api.delete(`/v1/admin/properties/${uuid}`),
   toggleFeaturedProperty: (uuid) =>
@@ -323,6 +337,22 @@ export const managerService = {
   getAllProperties: (params) =>
     api.get("/v1/gestionnaire/properties/all", { params }),
   getPendingProperties: () => api.get("/v1/gestionnaire/properties/pending"),
+  createProperty: (data) =>
+    api.post(
+      "/v1/gestionnaire/properties",
+      data,
+      data instanceof FormData
+        ? { headers: { "Content-Type": "multipart/form-data" } }
+        : undefined,
+    ),
+  updateProperty: (uuid, data) =>
+    api.put(
+      `/v1/gestionnaire/properties/${uuid}`,
+      data,
+      data instanceof FormData
+        ? { headers: { "Content-Type": "multipart/form-data" } }
+        : undefined,
+    ),
   assignProperty: (uuid, data) =>
     api.post(`/v1/gestionnaire/properties/${uuid}/assign`, data),
   updatePropertyStatus: (uuid, data) =>
@@ -498,6 +528,10 @@ export const agentService = {
     api.post(`/v1/agent/client-requests/${uuid}/approve`),
   rejectClientRequest: (uuid, data) =>
     api.post(`/v1/agent/client-requests/${uuid}/reject`, data),
+  addClientRequestReport: (uuid, data) =>
+    api.post(`/v1/agent/client-requests/${uuid}/reports`, data),
+  concludeClientRequestDeal: (uuid, data) =>
+    api.post(`/v1/agent/client-requests/${uuid}/conclude`, data),
 
   // Projets d'investissement (agent)
   getInvestmentPublications: () =>
@@ -613,4 +647,3 @@ export const companyService = {
 };
 
 export default api;
-

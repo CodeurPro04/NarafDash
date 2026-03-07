@@ -1,12 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
 import { adminService, managerService, publicConstructionService } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
-import { Save, Trash2, Plus, HardHat } from 'lucide-react';
+import { Save, Trash2, Plus, HardHat, Search } from 'lucide-react';
 
 const ConstructionManagement = () => {
   const { user } = useAuth();
+  const location = useLocation();
+  const viewParam = new URLSearchParams(location.search).get('view');
+  const isCreateOnlyView = viewParam === 'create';
+  const isListOnlyView = viewParam === 'list';
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -19,6 +24,9 @@ const ConstructionManagement = () => {
   const [planFiles, setPlanFiles] = useState([]);
   const [rejectModal, setRejectModal] = useState({ open: false, project: null, reason: '' });
   const [showForm, setShowForm] = useState(false);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [listSearchTerm, setListSearchTerm] = useState('');
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -46,6 +54,11 @@ const ConstructionManagement = () => {
   useEffect(() => {
     loadProjects();
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    setShowForm(params.get('view') === 'create');
+  }, [location.search]);
 
   const loadProjects = async () => {
     try {
@@ -202,6 +215,16 @@ const ConstructionManagement = () => {
     if (images.length === 0) return '';
     return getStorageUrl(images[0]);
   };
+  const filteredProjects = useMemo(() => {
+    const term = listSearchTerm.trim().toLowerCase();
+    if (!term) return projects;
+    return projects.filter((project) => (
+      (project.title || '').toLowerCase().includes(term)
+      || (project.city || '').toLowerCase().includes(term)
+      || (project.location || '').toLowerCase().includes(term)
+      || String(project.surface_area || '').toLowerCase().includes(term)
+    ));
+  }, [projects, listSearchTerm]);
 
   const handleApprovePublication = async (project) => {
     if (!project?.uuid) return;
@@ -217,6 +240,10 @@ const ConstructionManagement = () => {
   const handleRejectPublication = async (project) => {
     if (!project?.uuid) return;
     setRejectModal({ open: true, project, reason: '' });
+  };
+  const handleViewProject = (project) => {
+    setSelectedProject(project);
+    setShowDetailsModal(true);
   };
 
   const confirmReject = async () => {
@@ -247,9 +274,13 @@ const ConstructionManagement = () => {
           <div className="max-w-7xl mx-auto space-y-6">
             <div>
               <p className="chip">{roleLabel}</p>
-              <h1 className="text-3xl font-semibold mt-3">Projets de construction</h1>
+              <h1 className="text-3xl font-semibold mt-3">
+                {isCreateOnlyView ? 'Ajout de projet de construction' : 'Liste des projets de construction'}
+              </h1>
               <p className="text-sm text-[rgba(15,42,46,0.6)] mt-2">
-                Publiez et gerez les projets de construction.
+                {isCreateOnlyView
+                  ? 'Renseignez uniquement le formulaire d’ajout du projet de construction.'
+                  : 'Consultez uniquement la liste des projets de construction.'}
               </p>
             </div>
 
@@ -257,6 +288,7 @@ const ConstructionManagement = () => {
               <div className="surface-panel p-4 text-sm text-[rgb(var(--clay))]">{error}</div>
             )}
 
+            {!isCreateOnlyView && !isListOnlyView && (
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold">Gestion des projets</h2>
@@ -272,6 +304,7 @@ const ConstructionManagement = () => {
                 {showForm ? 'Fermer le formulaire' : 'Ajouter un projet'}
               </button>
             </div>
+            )}
 
             {showForm && (
               <form onSubmit={handleSubmit} className="surface-panel p-6 space-y-4">
@@ -445,6 +478,7 @@ const ConstructionManagement = () => {
               </form>
             )}
 
+            {!isCreateOnlyView && !isListOnlyView && (
             <div className="surface-panel p-6 space-y-4">
               <h2 className="text-lg font-semibold">Projets en attente d'approbation</h2>
               {loading ? (
@@ -475,16 +509,33 @@ const ConstructionManagement = () => {
                 </div>
               )}
             </div>
+            )}
 
+            {!isCreateOnlyView && (
+            <div className="surface-panel p-5">
+              <div className="relative w-full">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[rgba(15,42,46,0.5)]" />
+                <input
+                  type="text"
+                  placeholder="Rechercher un projet de construction..."
+                  value={listSearchTerm}
+                  onChange={(e) => setListSearchTerm(e.target.value)}
+                  className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 py-3 pl-10 pr-4 text-sm"
+                />
+              </div>
+            </div>
+            )}
+
+            {!isCreateOnlyView && (
             <div className="surface-panel p-6 space-y-4">
-              <h2 className="text-lg font-semibold">Projets publies</h2>
+              <h2 className="text-lg font-semibold">Projets de construction</h2>
               {loading ? (
                 <p className="text-sm text-[rgba(15,42,46,0.5)]">Chargement...</p>
-              ) : projects.length === 0 ? (
+              ) : filteredProjects.length === 0 ? (
                 <p className="text-sm text-[rgba(15,42,46,0.5)]">Aucun projet.</p>
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {projects.map((project) => (
+                  {filteredProjects.map((project) => (
                     <div key={project.uuid} className="surface-panel p-5">
                       <div className="flex gap-4">
                         <div className="w-28 h-24 rounded-xl bg-[rgba(15,42,46,0.08)] flex items-center justify-center overflow-hidden">
@@ -513,6 +564,7 @@ const ConstructionManagement = () => {
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-2 mt-4">
+                        <button onClick={() => handleViewProject(project)} className="btn-ghost flex-1">Details</button>
                         <button onClick={() => handleEdit(project)} className="btn-ghost flex-1">Modifier</button>
                         <button onClick={() => handleDelete(project)} className="btn-ghost text-[rgb(var(--clay))] flex-1">
                           <Trash2 className="h-4 w-4" />
@@ -524,6 +576,7 @@ const ConstructionManagement = () => {
                 </div>
               )}
             </div>
+            )}
           </div>
         </main>
       </div>
@@ -547,6 +600,80 @@ const ConstructionManagement = () => {
             <div className="flex justify-end gap-3">
               <button onClick={() => setRejectModal({ open: false, project: null, reason: '' })} className="btn-ghost">Annuler</button>
               <button onClick={confirmReject} className="btn-primary">Confirmer</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showDetailsModal && selectedProject && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="surface-card w-full max-w-4xl p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-2xl font-semibold">{selectedProject.title || 'Projet construction'}</h2>
+                <p className="text-sm text-[rgba(15,42,46,0.6)] mt-2">
+                  {selectedProject.city || selectedProject.location || 'Localisation'}
+                </p>
+              </div>
+              <button onClick={() => setShowDetailsModal(false)} className="btn-ghost">Fermer</button>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 space-y-6">
+                <div className="rounded-2xl overflow-hidden bg-[rgba(15,42,46,0.06)]">
+                  {getCoverImage(selectedProject) ? (
+                    <img src={getCoverImage(selectedProject)} alt={selectedProject.title} className="w-full h-72 object-cover" />
+                  ) : (
+                    <div className="h-72 flex items-center justify-center">
+                      <HardHat className="h-10 w-10 text-[rgba(15,42,46,0.4)]" />
+                    </div>
+                  )}
+                </div>
+                <div className="surface-panel p-5 space-y-3">
+                  <h3 className="text-sm font-semibold">Description</h3>
+                  <p className="text-sm text-[rgba(15,42,46,0.7)]">
+                    {selectedProject.description || 'Aucune description disponible.'}
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-6">
+                <div className="surface-panel p-5 space-y-4">
+                  <h3 className="text-sm font-semibold">Informations</h3>
+                  <div className="space-y-3 text-sm text-[rgba(15,42,46,0.7)]">
+                    <div>
+                      <p className="text-xs text-[rgba(15,42,46,0.45)]">Budget</p>
+                      <p className="font-medium">
+                        {selectedProject.budget_min ? Number(selectedProject.budget_min).toLocaleString() : 'N/A'}
+                        {selectedProject.budget_max ? ` - ${Number(selectedProject.budget_max).toLocaleString()}` : ''}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[rgba(15,42,46,0.45)]">Surface</p>
+                      <p className="font-medium">{selectedProject.surface_area ? `${selectedProject.surface_area} m2` : 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[rgba(15,42,46,0.45)]">Statut</p>
+                      <p className="font-medium">{selectedProject.status || 'N/A'}</p>
+                    </div>
+                  </div>
+                </div>
+                {Array.isArray(selectedProject.plans_path) && selectedProject.plans_path.length > 0 && (
+                  <div className="surface-panel p-5 space-y-3">
+                    <h3 className="text-sm font-semibold">Plans</h3>
+                    <div className="space-y-2">
+                      {selectedProject.plans_path.map((path) => (
+                        <a
+                          key={path}
+                          href={getStorageUrl(path)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block text-sm text-[rgb(var(--ink))] hover:underline"
+                        >
+                          {path.split('/').pop()}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

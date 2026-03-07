@@ -1,13 +1,24 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
 import { adminService, managerService } from '../../services/api';
+import ClientRequestDomainSections from './ClientRequestDomainSections';
 import { useAuth } from '../../contexts/AuthContext';
-import { Save, Trash2, Plus } from 'lucide-react';
+import { Save, Trash2, Plus, Search } from 'lucide-react';
 
 const AdminInvestmentManagement = () => {
   const { user } = useAuth();
+  const location = useLocation();
+  const viewParam = new URLSearchParams(location.search).get('view');
+  const isCreateOnlyView = viewParam === 'create';
+  const isListOnlyView = viewParam === 'list';
+  const isRequestsOnlyView = viewParam === 'requests';
   const [projects, setProjects] = useState([]);
+  const [clientRequests, setClientRequests] = useState([]);
+  const [clientHistory, setClientHistory] = useState([]);
+  const [agents, setAgents] = useState([]);
+  const [assignments, setAssignments] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -19,6 +30,12 @@ const AdminInvestmentManagement = () => {
   const [rejectModal, setRejectModal] = useState({ open: false, project: null, reason: '' });
   const [historyModal, setHistoryModal] = useState({ open: false, project: null });
   const [showForm, setShowForm] = useState(false);
+  const [detailsModal, setDetailsModal] = useState({ open: false, project: null });
+  const [requestSearchTerm, setRequestSearchTerm] = useState('');
+  const [requestStatusFilter, setRequestStatusFilter] = useState('all');
+  const [requestDecisionFilter, setRequestDecisionFilter] = useState('all');
+  const [requestTypeFilter, setRequestTypeFilter] = useState('all');
+  const [listSearchTerm, setListSearchTerm] = useState('');
   const [formData, setFormData] = useState({
     title: '',
     project_type: 'immobilier',
@@ -126,14 +143,30 @@ const AdminInvestmentManagement = () => {
     loadProjects();
   }, []);
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    setShowForm(params.get('view') === 'create');
+  }, [location.search]);
+
   const loadProjects = async () => {
     try {
       setLoading(true);
       setError('');
-      const response = await service.getInvestments();
-      const payload = response?.data?.data ?? response?.data ?? [];
+      const [projectsResponse, agentsResponse, pendingClientResponse, clientHistoryResponse] = await Promise.all([
+        service.getInvestments(),
+        service.getAvailableAgents(),
+        service.getPendingClientRequests(),
+        service.getClientRequestHistory(),
+      ]);
+      const payload = projectsResponse?.data?.data ?? projectsResponse?.data ?? [];
       const list = payload.data || payload;
+      const agentsPayload = agentsResponse?.data?.data ?? agentsResponse?.data ?? [];
+      const pendingClientPayload = pendingClientResponse?.data?.data ?? pendingClientResponse?.data ?? [];
+      const clientHistoryPayload = clientHistoryResponse?.data?.data ?? clientHistoryResponse?.data ?? [];
       setProjects(Array.isArray(list) ? list : []);
+      setAgents(Array.isArray(agentsPayload) ? agentsPayload : []);
+      setClientRequests(Array.isArray(pendingClientPayload.data || pendingClientPayload) ? (pendingClientPayload.data || pendingClientPayload) : []);
+      setClientHistory(Array.isArray(clientHistoryPayload.data || clientHistoryPayload) ? (clientHistoryPayload.data || clientHistoryPayload) : []);
     } catch (err) {
       console.error('Erreur lors du chargement des projets:', err);
       setError('Impossible de charger les projets.');
@@ -282,6 +315,35 @@ const AdminInvestmentManagement = () => {
     }
   };
 
+  const handleApproveClientRequest = async (uuid) => {
+    try {
+      await service.approveClientRequest(uuid);
+      await loadProjects();
+    } catch (err) {
+      console.error('Erreur approbation demande client:', err);
+      setError('Erreur lors de la mise a jour du statut.');
+    }
+  };
+
+  const handleAssignClientRequest = async (uuid) => {
+    const agentId = assignments[uuid];
+    if (!agentId) {
+      alert('Veuillez selectionner un agent');
+      return;
+    }
+    try {
+      await service.assignClientRequest(uuid, { agent_id: agentId });
+      await loadProjects();
+    } catch (err) {
+      console.error('Erreur assignation demande client:', err);
+      setError(err.response?.data?.message || 'Erreur lors de l assignation.');
+    }
+  };
+
+  const openRejectClientRequestModal = (item) => {
+    setRejectModal({ open: true, project: item, reason: '' });
+  };
+
   const confirmReject = async () => {
     if (!rejectModal.project?.uuid) return;
     if (!rejectModal.reason.trim()) {
@@ -289,7 +351,11 @@ const AdminInvestmentManagement = () => {
       return;
     }
     try {
-      await service.rejectInvestment(rejectModal.project.uuid, { rejection_reason: rejectModal.reason.trim() });
+      if (isRequestsOnlyView) {
+        await service.rejectClientRequest(rejectModal.project.uuid, { rejection_reason: rejectModal.reason.trim() });
+      } else {
+        await service.rejectInvestment(rejectModal.project.uuid, { rejection_reason: rejectModal.reason.trim() });
+      }
       await loadProjects();
       setRejectModal({ open: false, project: null, reason: '' });
     } catch (err) {
@@ -303,9 +369,90 @@ const AdminInvestmentManagement = () => {
     if (status === 'rejected') return { label: 'Rejete', className: 'bg-rose-100 text-rose-700' };
     return { label: 'En attente', className: 'bg-amber-100 text-amber-700' };
   };
+  const decisionLabel = (status) => {
+    if (status === 'approved') return 'Accepte';
+    if (status === 'rejected') return 'Refuse';
+    return 'En attente';
+  };
+  const matchesRequestFilters = (project) => {
+    const term = requestSearchTerm.trim().toLowerCase();
+    const status = project.approval_status || 'pending';
+    const decision = decisionLabel(status);
+    const type = project.project_type || 'immobilier';
+    const matchesSearch = !term
+      || (project.title || '').toLowerCase().includes(term)
+      || (project.city || '').toLowerCase().includes(term)
+      || (project.location || '').toLowerCase().includes(term)
+      || (getTypeLabel(project.project_type) || '').toLowerCase().includes(term)
+      || approvalBadge(project.approval_status).label.toLowerCase().includes(term);
+    const matchesStatus = requestStatusFilter === 'all' || status === requestStatusFilter;
+    const matchesDecision = requestDecisionFilter === 'all' || decision === requestDecisionFilter;
+    const matchesType = requestTypeFilter === 'all' || type === requestTypeFilter;
+    return matchesSearch && matchesStatus && matchesDecision && matchesType;
+  };
 
   const pendingProjects = projects.filter((project) => (project.approval_status || 'pending') !== 'approved');
   const publishedProjects = projects.filter((project) => (project.approval_status || 'pending') === 'approved');
+  const investmentHistory = projects
+    .filter((project) => (project.approval_status || 'pending') !== 'pending')
+    .sort((a, b) => {
+      const aDate = new Date(a.updated_at || a.created_at || 0).getTime();
+      const bDate = new Date(b.updated_at || b.created_at || 0).getTime();
+      return bDate - aDate;
+    });
+  const filteredPendingProjects = useMemo(
+    () => pendingProjects.filter(matchesRequestFilters),
+    [pendingProjects, requestSearchTerm, requestStatusFilter, requestDecisionFilter, requestTypeFilter]
+  );
+  const filteredInvestmentHistory = useMemo(
+    () => investmentHistory.filter(matchesRequestFilters),
+    [investmentHistory, requestSearchTerm, requestStatusFilter, requestDecisionFilter, requestTypeFilter]
+  );
+  const filteredInvestmentClientRequests = useMemo(
+    () => clientRequests
+      .filter((item) => item.request_type === 'investissement')
+      .filter((item) => {
+        const term = requestSearchTerm.trim().toLowerCase();
+        if (!term) return true;
+        return (
+          (item.name || '').toLowerCase().includes(term)
+          || (item.email || '').toLowerCase().includes(term)
+          || (item.phone || '').toLowerCase().includes(term)
+          || (item.message || '').toLowerCase().includes(term)
+        );
+      })
+      .filter((item) => requestStatusFilter === 'all' || (item.status || 'pending') === requestStatusFilter)
+      .filter((item) => requestDecisionFilter === 'all' || decisionLabel(item.status) === requestDecisionFilter),
+    [clientRequests, requestSearchTerm, requestStatusFilter, requestDecisionFilter]
+  );
+  const filteredInvestmentClientHistory = useMemo(
+    () => clientHistory
+      .filter((item) => item.request_type === 'investissement')
+      .filter((item) => {
+        const term = requestSearchTerm.trim().toLowerCase();
+        if (!term) return true;
+        return (
+          (item.name || '').toLowerCase().includes(term)
+          || (item.email || '').toLowerCase().includes(term)
+          || (item.phone || '').toLowerCase().includes(term)
+          || (item.message || '').toLowerCase().includes(term)
+        );
+      })
+      .filter((item) => requestStatusFilter === 'all' || (item.status || 'pending') === requestStatusFilter)
+      .filter((item) => requestDecisionFilter === 'all' || decisionLabel(item.status) === requestDecisionFilter),
+    [clientHistory, requestSearchTerm, requestStatusFilter, requestDecisionFilter]
+  );
+  const filteredPublishedProjects = useMemo(() => {
+    const term = listSearchTerm.trim().toLowerCase();
+    if (!term) return publishedProjects;
+    return publishedProjects.filter((project) => (
+      (project.title || '').toLowerCase().includes(term)
+      || (project.city || '').toLowerCase().includes(term)
+      || (project.location || '').toLowerCase().includes(term)
+      || (getTypeLabel(project.project_type) || '').toLowerCase().includes(term)
+      || (project.reference_code || '').toLowerCase().includes(term)
+    ));
+  }, [publishedProjects, listSearchTerm]);
 
   return (
     <div className="app-shell flex">
@@ -316,9 +463,23 @@ const AdminInvestmentManagement = () => {
           <div className="max-w-7xl mx-auto space-y-6">
             <div>
               <p className="chip">{roleLabel}</p>
-              <h1 className="text-3xl font-semibold mt-3">Investissements</h1>
+              <h1 className="text-3xl font-semibold mt-3">
+                {isCreateOnlyView
+                  ? "Ajout de projet d'investissement"
+                  : isListOnlyView
+                    ? "Liste des projets d'investissement"
+                    : isRequestsOnlyView
+                      ? "Demandes d'investissement"
+                      : 'Investissements'}
+              </h1>
               <p className="text-sm text-[rgba(15,42,46,0.6)] mt-2">
-                Creez, publiez et gerez les projets d'investissement.
+                {isCreateOnlyView
+                  ? "Renseignez uniquement le formulaire d'ajout d'un projet d'investissement."
+                  : isListOnlyView
+                    ? "Consultez uniquement la liste des projets d'investissement."
+                    : isRequestsOnlyView
+                      ? "Consultez uniquement les demandes d'investissement et leur historique."
+                      : "Creez, publiez et gerez les projets d'investissement."}
               </p>
             </div>
 
@@ -326,6 +487,49 @@ const AdminInvestmentManagement = () => {
               <div className="surface-panel p-4 text-sm text-[rgb(var(--clay))]">{error}</div>
             )}
 
+            {isRequestsOnlyView && (
+              <div className="surface-panel p-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <select
+                    value={requestStatusFilter}
+                    onChange={(e) => setRequestStatusFilter(e.target.value)}
+                    className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-3 py-3 text-sm"
+                  >
+                    <option value="all">Tous statuts</option>
+                    <option value="pending">En attente</option>
+                    <option value="approved">Approuve</option>
+                    <option value="rejected">Rejete</option>
+                  </select>
+                  <select
+                    value={requestDecisionFilter}
+                    onChange={(e) => setRequestDecisionFilter(e.target.value)}
+                    className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-3 py-3 text-sm"
+                  >
+                    <option value="all">Toutes decisions</option>
+                    <option value="Accepte">Accepte</option>
+                    <option value="Refuse">Refuse</option>
+                    <option value="En attente">En attente</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {isRequestsOnlyView && (
+              <div className="surface-panel p-5">
+                <div className="relative w-full">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[rgba(15,42,46,0.5)]" />
+                  <input
+                    type="text"
+                    placeholder="Rechercher une demande d'investissement..."
+                    value={requestSearchTerm}
+                    onChange={(e) => setRequestSearchTerm(e.target.value)}
+                    className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 py-3 pl-10 pr-4 text-sm"
+                  />
+                </div>
+              </div>
+            )}
+
+            {!isCreateOnlyView && !isListOnlyView && !isRequestsOnlyView && (
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold">Gestion des projets</h2>
@@ -341,6 +545,7 @@ const AdminInvestmentManagement = () => {
                 {showForm ? 'Fermer le formulaire' : 'Ajouter un projet'}
               </button>
             </div>
+            )}
 
             {showForm && (
             <form onSubmit={handleSubmit} className="surface-panel p-6 space-y-6">
@@ -661,15 +866,16 @@ const AdminInvestmentManagement = () => {
             </form>
             )}
 
+            {!isCreateOnlyView && !isListOnlyView && !isRequestsOnlyView && (
             <div className="surface-panel p-6 space-y-4">
               <h2 className="text-lg font-semibold">Projets en attente d'approbation</h2>
               {loading ? (
                 <p className="text-sm text-[rgba(15,42,46,0.5)]">Chargement...</p>
-              ) : pendingProjects.length === 0 ? (
+              ) : filteredPendingProjects.length === 0 ? (
                 <p className="text-sm text-[rgba(15,42,46,0.5)]">Aucun projet en attente.</p>
               ) : (
                 <div className="grid grid-cols-1 gap-4">
-                  {pendingProjects.map((project) => (
+                  {filteredPendingProjects.map((project) => (
                     <div key={project.uuid} className="surface-soft p-4 flex flex-col xl:flex-row gap-4">
                       <div className="xl:w-56 w-full">
                         <img
@@ -761,16 +967,54 @@ const AdminInvestmentManagement = () => {
                 </div>
               )}
             </div>
+            )}
 
+            {isRequestsOnlyView && (
+              <ClientRequestDomainSections
+                requestType="investissement"
+                requests={filteredInvestmentClientRequests}
+                history={filteredInvestmentClientHistory}
+                agents={agents}
+                assignments={assignments}
+                setAssignments={setAssignments}
+                loading={loading}
+                onApprove={handleApproveClientRequest}
+                onOpenReject={openRejectClientRequestModal}
+                onAssign={handleAssignClientRequest}
+                onOpenHistoryReason={(item) => setHistoryModal({ open: true, project: item })}
+                pendingTitle="Demandes d'investissement"
+                pendingDescription="Traitez d'abord les demandes d'investissement envoyees par les clients, puis consultez leur historique."
+                historyTitle="Historique des demandes d'investissement"
+                emptyPendingLabel="Aucune demande."
+                emptyHistoryLabel="Aucun historique."
+              />
+            )}
+
+            {!isCreateOnlyView && !isRequestsOnlyView && (
+            <div className="surface-panel p-5">
+              <div className="relative w-full">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[rgba(15,42,46,0.5)]" />
+                <input
+                  type="text"
+                  placeholder="Rechercher un projet d'investissement..."
+                  value={listSearchTerm}
+                  onChange={(e) => setListSearchTerm(e.target.value)}
+                  className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 py-3 pl-10 pr-4 text-sm"
+                />
+              </div>
+            </div>
+            )}
+
+            {!isCreateOnlyView && !isRequestsOnlyView && (
             <div className="surface-panel p-6 space-y-4">
-              <h2 className="text-lg font-semibold">Projets publies</h2>
+              <h2 className="text-lg font-semibold">Projets d'investissement</h2>
               {loading ? (
                 <p className="text-sm text-[rgba(15,42,46,0.5)]">Chargement...</p>
-              ) : publishedProjects.length === 0 ? (
+              ) : filteredPublishedProjects.length === 0 ? (
                 <p className="text-sm text-[rgba(15,42,46,0.5)]">Aucun projet.</p>
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {publishedProjects.map((project) => (
+                  {filteredPublishedProjects.map((project) => (
                     <div key={project.uuid} className="surface-panel p-5">
                       <div className="flex gap-4">
                         <div className="w-28 h-24 rounded-xl bg-[rgba(15,42,46,0.08)] flex items-center justify-center overflow-hidden">
@@ -798,6 +1042,7 @@ const AdminInvestmentManagement = () => {
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-2 mt-4">
+                        <button onClick={() => setDetailsModal({ open: true, project })} className="btn-ghost flex-1">Details</button>
                         <button onClick={() => handleEdit(project)} className="btn-ghost flex-1">Modifier</button>
                         <button onClick={() => handleDelete(project)} className="btn-ghost text-[rgb(var(--clay))] flex-1">
                           <Trash2 className="h-4 w-4" />
@@ -809,6 +1054,7 @@ const AdminInvestmentManagement = () => {
                 </div>
               )}
             </div>
+            )}
           </div>
         </main>
       </div>
@@ -859,6 +1105,69 @@ const AdminInvestmentManagement = () => {
               >
                 Fermer
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {detailsModal.open && detailsModal.project && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-5xl rounded-2xl bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between gap-4 mb-6">
+              <div>
+                <h3 className="text-2xl font-semibold">{detailsModal.project.title || "Projet d'investissement"}</h3>
+                <p className="text-sm text-[rgba(15,42,46,0.6)] mt-2">
+                  {detailsModal.project.city || detailsModal.project.location || 'Localisation'}
+                </p>
+              </div>
+              <button type="button" className="btn-ghost" onClick={() => setDetailsModal({ open: false, project: null })}>
+                Fermer
+              </button>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 space-y-6">
+                <div className="rounded-2xl overflow-hidden bg-[rgba(15,42,46,0.06)]">
+                  {Array.isArray(detailsModal.project.images_path) && detailsModal.project.images_path.length ? (
+                    <img
+                      src={getStorageUrl(detailsModal.project.images_path[0])}
+                      alt={detailsModal.project.title}
+                      className="w-full h-72 object-cover"
+                    />
+                  ) : (
+                    <div className="h-72 flex items-center justify-center text-sm text-[rgba(15,42,46,0.5)]">Aucun visuel</div>
+                  )}
+                </div>
+                <div className="surface-soft px-5 py-4">
+                  <h4 className="text-sm font-semibold">Description</h4>
+                  <p className="mt-3 text-sm text-[rgba(15,42,46,0.7)]">
+                    {detailsModal.project.description || 'Aucune description disponible.'}
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-6">
+                <div className="surface-soft px-5 py-4 space-y-3">
+                  <h4 className="text-sm font-semibold">Informations</h4>
+                  <div>
+                    <p className="text-xs text-[rgba(15,42,46,0.45)]">Type</p>
+                    <p className="font-medium">{getTypeLabel(detailsModal.project.project_type)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-[rgba(15,42,46,0.45)]">Prix total</p>
+                    <p className="font-medium">{formatPrice(detailsModal.project.total_investment)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-[rgba(15,42,46,0.45)]">Investissement minimum</p>
+                    <p className="font-medium">{formatPrice(detailsModal.project.min_investment)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-[rgba(15,42,46,0.45)]">Rendement attendu</p>
+                    <p className="font-medium">{detailsModal.project.expected_return ? `${detailsModal.project.expected_return}%` : 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-[rgba(15,42,46,0.45)]">Statut</p>
+                    <p className="font-medium">{getStatusLabel(detailsModal.project.status)}</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

@@ -1,12 +1,17 @@
 import React, { useEffect, useState } from 'react';
+import { FileText, CheckCircle, MessageSquare, Send } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
 import { agentService } from '../../services/api';
-import { FileText, CheckCircle, MessageSquare, Send } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
+import { normalizeAgentType } from '../../utils/agentType';
 
 const AgentSearchRequests = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { user } = useAuth();
+  const agentType = normalizeAgentType(user?.agent_type || user?.agentType);
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -14,6 +19,8 @@ const AgentSearchRequests = () => {
   const [messageSubject, setMessageSubject] = useState('');
   const [messageBody, setMessageBody] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
+  const currentView = new URLSearchParams(location.search).get('view') || 'assigned';
+  const isHistoryView = currentView === 'history';
 
   const extractPayload = (response) => response?.data?.data ?? response?.data ?? [];
 
@@ -102,6 +109,22 @@ const AgentSearchRequests = () => {
 
   const pendingRequests = requests.filter((request) => !isTreated(request));
   const treatedRequests = requests.filter((request) => isTreated(request));
+  const workspaceLabel = agentType === 'constructeur'
+    ? 'Agent construction'
+    : agentType === 'investissement'
+      ? 'Agent investissement'
+      : 'Agent immobilier';
+  const requestTitle = agentType === 'immobilier' ? 'Demandes de recherche' : 'Demandes assignees';
+  const requestDescription = agentType === 'constructeur'
+    ? 'Traitez vos demandes construction assignees et contactez le client si besoin.'
+    : agentType === 'investissement'
+      ? 'Traitez vos demandes investissement assignees et contactez le client si besoin.'
+      : 'Traitez les demandes assignees et contactez le client si besoin.';
+  const historyDescription = agentType === 'constructeur'
+    ? 'Consultez uniquement l historique des demandes construction traitees.'
+    : agentType === 'investissement'
+      ? 'Consultez uniquement l historique des demandes investissement traitees.'
+      : 'Consultez uniquement l historique des demandes de recherche traitees.';
 
   return (
     <div className="app-shell flex">
@@ -111,10 +134,14 @@ const AgentSearchRequests = () => {
         <main className="flex-1 px-6 py-8">
           <div className="max-w-6xl mx-auto space-y-6">
             <div>
-              <p className="chip">Agent immobilier</p>
-              <h1 className="text-3xl font-semibold mt-3">Demandes de recherche</h1>
+              <p className="chip">{workspaceLabel}</p>
+              <h1 className="text-3xl font-semibold mt-3">
+                {isHistoryView ? 'Historique des demandes' : requestTitle}
+              </h1>
               <p className="text-sm text-[rgba(15,42,46,0.6)] mt-2">
-                Traitez les demandes assignees et contactez le client si besoin.
+                {isHistoryView
+                  ? historyDescription
+                  : requestDescription}
               </p>
             </div>
 
@@ -122,7 +149,8 @@ const AgentSearchRequests = () => {
               <div className="surface-panel p-4 text-sm text-[rgb(var(--clay))]">{error}</div>
             )}
 
-            <div className="surface-panel p-6 space-y-4">
+            {!isHistoryView && (
+              <div className="surface-panel p-6 space-y-4">
               <div className="flex items-center gap-2">
                 <FileText className="h-5 w-5" />
                 <h2 className="text-lg font-semibold">Demandes en cours</h2>
@@ -166,8 +194,10 @@ const AgentSearchRequests = () => {
                 </div>
               )}
             </div>
+            )}
 
-            <div className="surface-panel p-6 space-y-4">
+            {isHistoryView && (
+              <div className="surface-panel p-6 space-y-4">
               <div className="flex items-center gap-2">
                 <FileText className="h-5 w-5" />
                 <h2 className="text-lg font-semibold">Historique des demandes traitees</h2>
@@ -207,6 +237,7 @@ const AgentSearchRequests = () => {
                 </div>
               )}
             </div>
+            )}
           </div>
         </main>
       </div>
