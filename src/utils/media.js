@@ -1,5 +1,5 @@
 const getBaseUrl = () => {
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+  const apiUrl = import.meta.env.VITE_API_URL || 'https://api.africabuildinvest.com/api';
   return apiUrl.replace(/\/api\/?$/, '');
 };
 

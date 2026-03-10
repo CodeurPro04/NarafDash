@@ -8,7 +8,7 @@ const normalizeApiBase = (rawUrl) => {
 
 // Configuration de base d'Axios
 const rawBaseUrl =
-  import.meta.env.VITE_API_URL || "http://localhost:8000";
+  import.meta.env.VITE_API_URL || "https://api.africabuildinvest.com";
 const apiBaseUrl = normalizeApiBase(rawBaseUrl);
 const api = axios.create({
   baseURL: `${apiBaseUrl}/api`,

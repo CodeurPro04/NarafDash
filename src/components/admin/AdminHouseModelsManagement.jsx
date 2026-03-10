@@ -12,10 +12,50 @@ const emptyForm = {
   is_active: true,
 };
 
+const createEmptyShowcaseItem = () => ({
+  title: "",
+  excerpt: "",
+  image_url: "",
+  link: "",
+});
+
+const mapSectionItems = (items) => {
+  if (!Array.isArray(items) || !items.length) {
+    return [createEmptyShowcaseItem()];
+  }
+
+  return items.map((item) => ({
+    title: item?.title || "",
+    excerpt: item?.excerpt || "",
+    image_url: item?.image_url || "",
+    link: item?.link || "",
+  }));
+};
+
 const defaultSectionForm = {
   title: "",
   description: "",
   videos: [""],
+  showcaseSections: [
+    {
+      title: "Besoin d'un bien",
+      button_label: "Voir tous les articles",
+      button_link: "/properties",
+      items: Array.from({ length: 4 }, () => createEmptyShowcaseItem()),
+    },
+    {
+      title: "Besoin d'un projet de construction",
+      button_label: "Voir tous les projets",
+      button_link: "/construction",
+      items: Array.from({ length: 4 }, () => createEmptyShowcaseItem()),
+    },
+    {
+      title: "J'investis dans un projet",
+      button_label: "Voir les opportunites",
+      button_link: "/investment",
+      items: Array.from({ length: 4 }, () => createEmptyShowcaseItem()),
+    },
+  ],
 };
 
 const AdminHouseModelsManagement = () => {
@@ -62,6 +102,19 @@ const AdminHouseModelsManagement = () => {
           Array.isArray(payload?.section?.videos) && payload.section.videos.length
             ? payload.section.videos
             : [""],
+        showcaseSections:
+          Array.isArray(payload?.section?.showcase_sections) &&
+          payload.section.showcase_sections.length
+            ? defaultSectionForm.showcaseSections.map((fallbackSection, sectionIndex) => {
+                const section = payload.section.showcase_sections?.[sectionIndex] || {};
+                return ({
+                title: section?.title || fallbackSection.title,
+                button_label: section?.button_label || fallbackSection.button_label,
+                button_link: section?.button_link || fallbackSection.button_link,
+                items: mapSectionItems(section?.items),
+                });
+              })
+            : defaultSectionForm.showcaseSections,
       });
     } catch (err) {
       console.error("Erreur chargement modeles:", err);
@@ -177,6 +230,34 @@ const AdminHouseModelsManagement = () => {
     );
   };
 
+  const addShowcaseCard = (sectionIndex) => {
+    setSectionForm((prev) => ({
+      ...prev,
+      showcaseSections: prev.showcaseSections.map((section, index) =>
+        index === sectionIndex
+          ? {
+              ...section,
+              items: [...section.items, createEmptyShowcaseItem()],
+            }
+          : section,
+      ),
+    }));
+  };
+
+  const removeShowcaseCard = (sectionIndex, itemIndex) => {
+    setSectionForm((prev) => ({
+      ...prev,
+      showcaseSections: prev.showcaseSections.map((section, index) => {
+        if (index !== sectionIndex) return section;
+        if ((section.items || []).length <= 1) return section;
+        return {
+          ...section,
+          items: section.items.filter((_, currentIndex) => currentIndex !== itemIndex),
+        };
+      }),
+    }));
+  };
+
   const handleSectionSubmit = async (event) => {
     event.preventDefault();
     setSectionSaving(true);
@@ -189,6 +270,17 @@ const AdminHouseModelsManagement = () => {
         video_urls: sectionForm.videos.filter((video) =>
           String(video || "").trim(),
         ),
+        showcase_sections: sectionForm.showcaseSections.map((section) => ({
+          title: section.title,
+          button_label: section.button_label,
+          button_link: section.button_link,
+          items: section.items.map((item) => ({
+            title: item.title,
+            excerpt: item.excerpt,
+            image_url: item.image_url,
+            link: item.link,
+          })),
+        })),
       });
       const section = response?.data?.section;
       if (section) {
@@ -199,6 +291,19 @@ const AdminHouseModelsManagement = () => {
             Array.isArray(section.videos) && section.videos.length
               ? section.videos
               : [""],
+          showcaseSections:
+            Array.isArray(section.showcase_sections) &&
+            section.showcase_sections.length
+              ? defaultSectionForm.showcaseSections.map((fallbackSection, sectionIndex) => {
+                  const currentSection = section.showcase_sections?.[sectionIndex] || {};
+                  return ({
+                  title: currentSection?.title || fallbackSection.title,
+                  button_label: currentSection?.button_label || fallbackSection.button_label,
+                  button_link: currentSection?.button_link || fallbackSection.button_link,
+                  items: mapSectionItems(currentSection?.items),
+                  });
+                })
+              : defaultSectionForm.showcaseSections,
         });
       }
     } catch (err) {
@@ -339,6 +444,228 @@ const AdminHouseModelsManagement = () => {
                     Ajoutez un ou plusieurs liens video YouTube ou Vimeo. Vous
                     pourrez les modifier a tout moment.
                   </p>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-sm font-semibold">
+                      Sections de contenu sous les modeles
+                    </h3>
+                    <p className="mt-1 text-xs text-[rgba(15,42,46,0.55)]">
+                      Trois sections, avec autant de cartes que necessaire.
+                    </p>
+                  </div>
+                  {sectionForm.showcaseSections.map((section, sectionIndex) => (
+                    <div
+                      key={`showcase-section-${sectionIndex}`}
+                      className="rounded-2xl border border-[rgb(var(--line))] bg-white/60 p-4 space-y-4"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <h4 className="text-sm font-semibold">
+                          Section {sectionIndex + 1}
+                        </h4>
+                        <button
+                          type="button"
+                          className="btn-ghost"
+                          onClick={() => addShowcaseCard(sectionIndex)}
+                        >
+                          <Plus className="h-4 w-4" />
+                          Ajouter une carte
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div>
+                          <label className="mb-2 block text-sm font-medium">
+                            Titre
+                          </label>
+                          <input
+                            value={section.title}
+                            onChange={(e) =>
+                              setSectionForm((prev) => ({
+                                ...prev,
+                                showcaseSections: prev.showcaseSections.map((item, index) =>
+                                  index === sectionIndex
+                                    ? { ...item, title: e.target.value }
+                                    : item,
+                                ),
+                              }))
+                            }
+                            className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-2 block text-sm font-medium">
+                            Libelle du bouton
+                          </label>
+                          <input
+                            value={section.button_label}
+                            onChange={(e) =>
+                              setSectionForm((prev) => ({
+                                ...prev,
+                                showcaseSections: prev.showcaseSections.map((item, index) =>
+                                  index === sectionIndex
+                                    ? { ...item, button_label: e.target.value }
+                                    : item,
+                                ),
+                              }))
+                            }
+                            className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="mb-2 block text-sm font-medium">
+                            Lien du bouton
+                          </label>
+                          <input
+                            value={section.button_link}
+                            onChange={(e) =>
+                              setSectionForm((prev) => ({
+                                ...prev,
+                                showcaseSections: prev.showcaseSections.map((item, index) =>
+                                  index === sectionIndex
+                                    ? { ...item, button_link: e.target.value }
+                                    : item,
+                                ),
+                              }))
+                            }
+                            className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                        {section.items.map((item, itemIndex) => (
+                          <div
+                            key={`showcase-item-${sectionIndex}-${itemIndex}`}
+                            className="rounded-2xl border border-[rgb(var(--line))] bg-white/70 p-4 space-y-3"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <h5 className="text-sm font-semibold">
+                                Carte {itemIndex + 1}
+                              </h5>
+                              {section.items.length > 1 && (
+                                <button
+                                  type="button"
+                                  className="btn-ghost text-[rgb(var(--clay))]"
+                                  onClick={() =>
+                                    removeShowcaseCard(sectionIndex, itemIndex)
+                                  }
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                  Supprimer
+                                </button>
+                              )}
+                            </div>
+                            <div>
+                              <label className="mb-2 block text-sm font-medium">
+                                Titre
+                              </label>
+                              <input
+                                value={item.title}
+                                onChange={(e) =>
+                                  setSectionForm((prev) => ({
+                                    ...prev,
+                                    showcaseSections: prev.showcaseSections.map((sectionItem, index) =>
+                                      index === sectionIndex
+                                        ? {
+                                            ...sectionItem,
+                                            items: sectionItem.items.map((currentItem, currentIndex) =>
+                                              currentIndex === itemIndex
+                                                ? { ...currentItem, title: e.target.value }
+                                                : currentItem,
+                                            ),
+                                          }
+                                        : sectionItem,
+                                    ),
+                                  }))
+                                }
+                                className="w-full rounded-xl border border-[rgb(var(--line))] bg-white px-4 py-3 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="mb-2 block text-sm font-medium">
+                                Resume
+                              </label>
+                              <textarea
+                                rows="3"
+                                value={item.excerpt}
+                                onChange={(e) =>
+                                  setSectionForm((prev) => ({
+                                    ...prev,
+                                    showcaseSections: prev.showcaseSections.map((sectionItem, index) =>
+                                      index === sectionIndex
+                                        ? {
+                                            ...sectionItem,
+                                            items: sectionItem.items.map((currentItem, currentIndex) =>
+                                              currentIndex === itemIndex
+                                                ? { ...currentItem, excerpt: e.target.value }
+                                                : currentItem,
+                                            ),
+                                          }
+                                        : sectionItem,
+                                    ),
+                                  }))
+                                }
+                                className="w-full rounded-xl border border-[rgb(var(--line))] bg-white px-4 py-3 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="mb-2 block text-sm font-medium">
+                                Image (URL)
+                              </label>
+                              <input
+                                value={item.image_url}
+                                onChange={(e) =>
+                                  setSectionForm((prev) => ({
+                                    ...prev,
+                                    showcaseSections: prev.showcaseSections.map((sectionItem, index) =>
+                                      index === sectionIndex
+                                        ? {
+                                            ...sectionItem,
+                                            items: sectionItem.items.map((currentItem, currentIndex) =>
+                                              currentIndex === itemIndex
+                                                ? { ...currentItem, image_url: e.target.value }
+                                                : currentItem,
+                                            ),
+                                          }
+                                        : sectionItem,
+                                    ),
+                                  }))
+                                }
+                                className="w-full rounded-xl border border-[rgb(var(--line))] bg-white px-4 py-3 text-sm"
+                              />
+                            </div>
+                            <div>
+                              <label className="mb-2 block text-sm font-medium">
+                                Lien de la carte
+                              </label>
+                              <input
+                                value={item.link}
+                                onChange={(e) =>
+                                  setSectionForm((prev) => ({
+                                    ...prev,
+                                    showcaseSections: prev.showcaseSections.map((sectionItem, index) =>
+                                      index === sectionIndex
+                                        ? {
+                                            ...sectionItem,
+                                            items: sectionItem.items.map((currentItem, currentIndex) =>
+                                              currentIndex === itemIndex
+                                                ? { ...currentItem, link: e.target.value }
+                                                : currentItem,
+                                            ),
+                                          }
+                                        : sectionItem,
+                                    ),
+                                  }))
+                                }
+                                className="w-full rounded-xl border border-[rgb(var(--line))] bg-white px-4 py-3 text-sm"
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
