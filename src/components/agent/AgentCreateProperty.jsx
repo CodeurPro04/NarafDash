@@ -14,6 +14,8 @@ const AgentCreateProperty = () => {
   const [types, setTypes] = useState([]);
   const [features, setFeatures] = useState([]);
   const [images, setImages] = useState([]);
+  const [planImages, setPlanImages] = useState([]);
+  const [render3DImages, setRender3DImages] = useState([]);
   const [requestInfo] = useState(location.state?.request || null);
   const [formData, setFormData] = useState({
     title: '',
@@ -88,6 +90,50 @@ const AgentCreateProperty = () => {
     setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const handlePlanUpload = (event) => {
+    const files = Array.from(event.target.files || []);
+    setPlanImages((prev) => [...prev, ...files]);
+  };
+
+  const removePlanImage = (index) => {
+    setPlanImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleRender3DUpload = (event) => {
+    const files = Array.from(event.target.files || []);
+    setRender3DImages((prev) => [...prev, ...files]);
+  };
+
+  const removeRender3DImage = (index) => {
+    setRender3DImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const renderPreviewGrid = (files, onRemove, label) => (
+    files.length > 0 && (
+      <div>
+        <p className="text-sm font-medium mb-3">{label} ({files.length})</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {files.map((file, index) => (
+            <div key={`${file.name}-${index}`} className="relative">
+              <img
+                src={URL.createObjectURL(file)}
+                alt={`${label} ${index + 1}`}
+                className="w-full h-24 object-cover rounded-lg"
+              />
+              <button
+                type="button"
+                onClick={() => onRemove(index)}
+                className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-[rgb(var(--clay))] text-white text-xs"
+              >
+                x
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  );
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setLoading(true);
@@ -124,6 +170,12 @@ const AgentCreateProperty = () => {
 
       images.forEach((image) => {
         payload.append('images[]', image);
+      });
+      planImages.forEach((image) => {
+        payload.append('plan_images[]', image);
+      });
+      render3DImages.forEach((image) => {
+        payload.append('render_3d_images[]', image);
       });
 
       await agentService.createPropertyFromRequest(uuid, payload);
@@ -383,49 +435,74 @@ const AgentCreateProperty = () => {
               <div className="surface-panel p-6 space-y-6">
                 <h2 className="text-lg font-semibold flex items-center gap-2">
                   <Upload className="h-5 w-5" />
-                  Photos de la propriete
+                  Visuels du projet
                 </h2>
-                <div className="border-2 border-dashed border-[rgb(var(--line))] rounded-xl p-8 text-center">
-                  <Upload className="h-10 w-10 text-[rgba(15,42,46,0.4)] mx-auto mb-3" />
-                  <p className="text-sm text-[rgba(15,42,46,0.6)] mb-4">
-                    Glissez-deposez vos photos ici ou cliquez pour selectionner
-                  </p>
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="hidden"
-                    id="image-upload"
-                  />
-                  <label htmlFor="image-upload" className="btn-primary cursor-pointer inline-flex">
-                    Selectionner des photos
-                  </label>
+
+                <div className="space-y-4">
+                  <div className="border-2 border-dashed border-[rgb(var(--line))] rounded-xl p-8 text-center">
+                    <Upload className="h-10 w-10 text-[rgba(15,42,46,0.4)] mx-auto mb-3" />
+                    <p className="text-sm font-medium mb-2">Images standards *</p>
+                    <p className="text-sm text-[rgba(15,42,46,0.6)] mb-4">
+                      Ajoutez les photos principales de la propriete.
+                    </p>
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                      id="image-upload"
+                    />
+                    <label htmlFor="image-upload" className="btn-primary cursor-pointer inline-flex">
+                      Selectionner des photos
+                    </label>
+                  </div>
+                  {renderPreviewGrid(images, removeImage, 'Images standards selectionnees')}
                 </div>
 
-                {images.length > 0 && (
-                  <div>
-                    <p className="text-sm font-medium mb-3">Photos selectionnees ({images.length})</p>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {images.map((image, index) => (
-                        <div key={`${image.name}-${index}`} className="relative">
-                          <img
-                            src={URL.createObjectURL(image)}
-                            alt={`Photo ${index + 1}`}
-                            className="w-full h-24 object-cover rounded-lg"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => removeImage(index)}
-                            className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-[rgb(var(--clay))] text-white text-xs"
-                          >
-                            x
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+                <div className="space-y-4">
+                  <div className="border-2 border-dashed border-[rgb(var(--line))] rounded-xl p-8 text-center">
+                    <Upload className="h-10 w-10 text-[rgba(15,42,46,0.4)] mx-auto mb-3" />
+                    <p className="text-sm font-medium mb-2">Plans de construction</p>
+                    <p className="text-sm text-[rgba(15,42,46,0.6)] mb-4">
+                      Ajoutez des plans ou visuels techniques du projet.
+                    </p>
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      onChange={handlePlanUpload}
+                      className="hidden"
+                      id="plan-image-upload"
+                    />
+                    <label htmlFor="plan-image-upload" className="btn-primary cursor-pointer inline-flex">
+                      Ajouter des plans
+                    </label>
                   </div>
-                )}
+                  {renderPreviewGrid(planImages, removePlanImage, 'Plans selectionnes')}
+                </div>
+
+                <div className="space-y-4">
+                  <div className="border-2 border-dashed border-[rgb(var(--line))] rounded-xl p-8 text-center">
+                    <Upload className="h-10 w-10 text-[rgba(15,42,46,0.4)] mx-auto mb-3" />
+                    <p className="text-sm font-medium mb-2">Representations 3D</p>
+                    <p className="text-sm text-[rgba(15,42,46,0.6)] mb-4">
+                      Ajoutez les rendus 3D et visuels de projection.
+                    </p>
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      onChange={handleRender3DUpload}
+                      className="hidden"
+                      id="render3d-image-upload"
+                    />
+                    <label htmlFor="render3d-image-upload" className="btn-primary cursor-pointer inline-flex">
+                      Ajouter des visuels 3D
+                    </label>
+                  </div>
+                  {renderPreviewGrid(render3DImages, removeRender3DImage, 'Visuels 3D selectionnes')}
+                </div>
               </div>
 
               <div className="flex justify-end gap-3">

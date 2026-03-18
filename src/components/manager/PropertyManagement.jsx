@@ -38,6 +38,8 @@ const PropertyManagement = () => {
   const [types, setTypes] = useState([]);
   const [features, setFeatures] = useState([]);
   const [images, setImages] = useState([]);
+  const [planImages, setPlanImages] = useState([]);
+  const [render3DImages, setRender3DImages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -125,6 +127,8 @@ const PropertyManagement = () => {
   const resetForm = () => {
     setFormData(initialFormData);
     setImages([]);
+    setPlanImages([]);
+    setRender3DImages([]);
   };
 
   const handleInputChange = (event) => {
@@ -149,6 +153,40 @@ const PropertyManagement = () => {
   const removeImage = (index) => {
     setImages((prev) => prev.filter((_, imageIndex) => imageIndex !== index));
   };
+
+  const handlePlanUpload = (event) => {
+    const files = Array.from(event.target.files || []);
+    setPlanImages((prev) => [...prev, ...files]);
+  };
+
+  const removePlanImage = (index) => {
+    setPlanImages((prev) => prev.filter((_, imageIndex) => imageIndex !== index));
+  };
+
+  const handleRender3DUpload = (event) => {
+    const files = Array.from(event.target.files || []);
+    setRender3DImages((prev) => [...prev, ...files]);
+  };
+
+  const removeRender3DImage = (index) => {
+    setRender3DImages((prev) => prev.filter((_, imageIndex) => imageIndex !== index));
+  };
+
+  const renderPreviewGrid = (files, onRemove, label) => (
+    files.length > 0 && (
+      <div>
+        <p className="text-sm font-medium mb-3">{label} ({files.length})</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {files.map((file, index) => (
+            <div key={`${file.name}-${index}`} className="relative">
+              <img src={URL.createObjectURL(file)} alt={`${label} ${index + 1}`} className="w-full h-24 object-cover rounded-lg" />
+              <button type="button" onClick={() => onRemove(index)} className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-[rgb(var(--clay))] text-white text-xs">x</button>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  );
 
   const handleCreateProperty = async (event) => {
     event.preventDefault();
@@ -175,6 +213,8 @@ const PropertyManagement = () => {
         payload.append(key, value);
       });
       images.forEach((image) => payload.append('images[]', image));
+      planImages.forEach((image) => payload.append('plan_images[]', image));
+      render3DImages.forEach((image) => payload.append('render_3d_images[]', image));
       await managerService.createProperty(payload);
       resetForm();
       setShowCreateForm(false);

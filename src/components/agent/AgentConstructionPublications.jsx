@@ -11,6 +11,8 @@ const AgentConstructionPublications = () => {
   const [error, setError] = useState('');
   const [editingProject, setEditingProject] = useState(null);
   const [imageFiles, setImageFiles] = useState([]);
+  const [planFiles, setPlanFiles] = useState([]);
+  const [render3DFiles, setRender3DFiles] = useState([]);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -52,9 +54,19 @@ const AgentConstructionPublications = () => {
     setImageFiles(Array.from(event.target.files || []));
   };
 
+  const handlePlanFiles = (event) => {
+    setPlanFiles(Array.from(event.target.files || []));
+  };
+
+  const handleRender3DFiles = (event) => {
+    setRender3DFiles(Array.from(event.target.files || []));
+  };
+
   const handleEdit = (project) => {
     setEditingProject(project);
     setImageFiles([]);
+    setPlanFiles([]);
+    setRender3DFiles([]);
     setFormData({
       title: project.title || '',
       description: project.description || '',
@@ -69,6 +81,8 @@ const AgentConstructionPublications = () => {
   const resetForm = () => {
     setEditingProject(null);
     setImageFiles([]);
+    setPlanFiles([]);
+    setRender3DFiles([]);
     setFormData({
       title: '',
       description: '',
@@ -91,7 +105,7 @@ const AgentConstructionPublications = () => {
       budget_max: formData.budget_max ? Number(formData.budget_max) : null,
       surface_area: formData.surface_area ? Number(formData.surface_area) : null,
     };
-    const hasFiles = imageFiles.length > 0;
+    const hasFiles = imageFiles.length > 0 || planFiles.length > 0 || render3DFiles.length > 0;
     const requestData = hasFiles ? new FormData() : payload;
 
     if (hasFiles) {
@@ -101,6 +115,8 @@ const AgentConstructionPublications = () => {
         }
       });
       imageFiles.forEach((file) => requestData.append('images[]', file));
+      planFiles.forEach((file) => requestData.append('plans[]', file));
+      render3DFiles.forEach((file) => requestData.append('render_3d[]', file));
     }
 
     try {
@@ -226,7 +242,7 @@ const AgentConstructionPublications = () => {
                   />
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium mb-2">Images</label>
+                  <label className="block text-sm font-medium mb-2">Images standards</label>
                   <input
                     type="file"
                     multiple
@@ -237,6 +253,36 @@ const AgentConstructionPublications = () => {
                   {imageFiles.length > 0 && (
                     <p className="text-xs text-[rgba(15,42,46,0.5)] mt-2">
                       {imageFiles.length} image(s) selectionnee(s)
+                    </p>
+                  )}
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium mb-2">Plans de construction</label>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*,.pdf"
+                    onChange={handlePlanFiles}
+                    className="w-full text-sm"
+                  />
+                  {planFiles.length > 0 && (
+                    <p className="text-xs text-[rgba(15,42,46,0.5)] mt-2">
+                      {planFiles.length} plan(s) selectionne(s)
+                    </p>
+                  )}
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium mb-2">Representations 3D</label>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*,.pdf"
+                    onChange={handleRender3DFiles}
+                    className="w-full text-sm"
+                  />
+                  {render3DFiles.length > 0 && (
+                    <p className="text-xs text-[rgba(15,42,46,0.5)] mt-2">
+                      {render3DFiles.length} visuel(s) 3D selectionne(s)
                     </p>
                   )}
                 </div>

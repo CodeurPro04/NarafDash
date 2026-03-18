@@ -22,6 +22,8 @@ const ConstructionManagement = () => {
   const [imageFiles, setImageFiles] = useState([]);
   const [existingPlans, setExistingPlans] = useState([]);
   const [planFiles, setPlanFiles] = useState([]);
+  const [existingRender3D, setExistingRender3D] = useState([]);
+  const [render3DFiles, setRender3DFiles] = useState([]);
   const [rejectModal, setRejectModal] = useState({ open: false, project: null, reason: '' });
   const [showForm, setShowForm] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
@@ -125,6 +127,7 @@ const ConstructionManagement = () => {
     setPlanFiles([]);
     setExistingImages(Array.isArray(project.images_path) ? project.images_path : []);
     setExistingPlans(Array.isArray(project.plans_path) ? project.plans_path : []);
+    setExistingRender3D(Array.isArray(project.render_3d_path) ? project.render_3d_path : []);
     setShowForm(true);
     setFormData({
       title: project.title || '',
@@ -143,6 +146,8 @@ const ConstructionManagement = () => {
     setImageFiles([]);
     setExistingPlans([]);
     setPlanFiles([]);
+    setExistingRender3D([]);
+    setRender3DFiles([]);
     setShowForm(false);
     setFormData({
       title: '',
@@ -161,6 +166,10 @@ const ConstructionManagement = () => {
 
   const handlePlanFiles = (event) => {
     setPlanFiles(Array.from(event.target.files || []));
+  };
+
+  const handleRender3DFiles = (event) => {
+    setRender3DFiles(Array.from(event.target.files || []));
   };
 
   const handleRemoveImage = async (path) => {
@@ -187,6 +196,18 @@ const ConstructionManagement = () => {
     }
   };
 
+  const handleRemoveRender3D = async (path) => {
+    if (!editingProject?.uuid || !path) return;
+    if (!window.confirm('Supprimer ce visuel 3D ?')) return;
+    try {
+      await service.updateConstructionProject(editingProject.uuid, { remove_render_3d: [path] });
+      setExistingRender3D((prev) => prev.filter((item) => item !== path));
+    } catch (err) {
+      console.error('Erreur lors de la suppression du visuel 3D:', err);
+      setError('Erreur lors de la suppression du visuel 3D.');
+    }
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setSaving(true);
@@ -197,7 +218,7 @@ const ConstructionManagement = () => {
       budget_max: formData.budget_max ? Number(formData.budget_max) : null,
       surface_area: formData.surface_area ? Number(formData.surface_area) : null,
     };
-    const hasFiles = imageFiles.length > 0 || planFiles.length > 0;
+    const hasFiles = imageFiles.length > 0 || planFiles.length > 0 || render3DFiles.length > 0;
     const requestData = hasFiles ? new FormData() : payload;
 
     if (hasFiles) {
@@ -208,6 +229,7 @@ const ConstructionManagement = () => {
       });
       imageFiles.forEach((file) => requestData.append('images[]', file));
       planFiles.forEach((file) => requestData.append('plans[]', file));
+      render3DFiles.forEach((file) => requestData.append('render_3d[]', file));
     }
 
     try {

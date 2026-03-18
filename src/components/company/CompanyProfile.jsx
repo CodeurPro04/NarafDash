@@ -114,7 +114,7 @@ const CompanyProfile = () => {
         const data = response?.data?.data ?? response?.data ?? null;
         setApplication(data || null);
       }
-      setSuccess('Profil mis a jour.');
+      setSuccess(application?.uuid ? 'Profil mis a jour. Le compte repasse en attente de validation administrateur.' : 'Profil mis a jour.');
     } catch (err) {
       console.error('Erreur mise a jour profil:', err);
       setError('Erreur lors de la mise a jour.');

@@ -25,8 +25,12 @@ const AdminInvestmentManagement = () => {
   const [editingProject, setEditingProject] = useState(null);
   const [existingDocuments, setExistingDocuments] = useState([]);
   const [existingImages, setExistingImages] = useState([]);
+  const [existingPlans, setExistingPlans] = useState([]);
+  const [existingRender3D, setExistingRender3D] = useState([]);
   const [documentFiles, setDocumentFiles] = useState([]);
   const [imageFiles, setImageFiles] = useState([]);
+  const [planFiles, setPlanFiles] = useState([]);
+  const [render3DFiles, setRender3DFiles] = useState([]);
   const [rejectModal, setRejectModal] = useState({ open: false, project: null, reason: '' });
   const [historyModal, setHistoryModal] = useState({ open: false, project: null });
   const [showForm, setShowForm] = useState(false);
@@ -54,6 +58,8 @@ const AdminInvestmentManagement = () => {
     featured: false,
     documents_path: '',
     images_path: '',
+    plans_path: '',
+    render_3d_path: '',
     description: '',
   });
 
@@ -113,6 +119,14 @@ const AdminInvestmentManagement = () => {
   const handleImageFiles = (event) => {
     setImageFiles(Array.from(event.target.files || []));
   };
+
+  const handlePlanFiles = (event) => {
+    setPlanFiles(Array.from(event.target.files || []));
+  };
+
+  const handleRender3DFiles = (event) => {
+    setRender3DFiles(Array.from(event.target.files || []));
+  };
   const handleRemoveDocument = async (path) => {
     if (!editingProject?.uuid || !path) return;
     if (!window.confirm('Supprimer ce document ?')) return;
@@ -134,6 +148,30 @@ const AdminInvestmentManagement = () => {
     } catch (err) {
       console.error("Erreur lors de la suppression de l'image:", err);
       setError("Erreur lors de la suppression de l'image.");
+    }
+  };
+
+  const handleRemovePlan = async (path) => {
+    if (!editingProject?.uuid || !path) return;
+    if (!window.confirm('Supprimer ce plan ?')) return;
+    try {
+      await service.updateInvestment(editingProject.uuid, { remove_plans: [path] });
+      setExistingPlans((prev) => prev.filter((item) => item != path));
+    } catch (err) {
+      console.error('Erreur lors de la suppression du plan:', err);
+      setError('Erreur lors de la suppression du plan.');
+    }
+  };
+
+  const handleRemoveRender3D = async (path) => {
+    if (!editingProject?.uuid || !path) return;
+    if (!window.confirm('Supprimer ce visuel 3D ?')) return;
+    try {
+      await service.updateInvestment(editingProject.uuid, { remove_render_3d: [path] });
+      setExistingRender3D((prev) => prev.filter((item) => item != path));
+    } catch (err) {
+      console.error('Erreur lors de la suppression du visuel 3D:', err);
+      setError('Erreur lors de la suppression du visuel 3D.');
     }
   };
 
@@ -186,6 +224,8 @@ const AdminInvestmentManagement = () => {
     setImageFiles([]);
     setExistingDocuments(Array.isArray(project.documents_path) ? project.documents_path : []);
     setExistingImages(Array.isArray(project.images_path) ? project.images_path : []);
+    setExistingPlans(Array.isArray(project.plans_path) ? project.plans_path : []);
+    setExistingRender3D(Array.isArray(project.render_3d_path) ? project.render_3d_path : []);
     setShowForm(true);
     setFormData({
       title: project.title || '',
@@ -215,6 +255,8 @@ const AdminInvestmentManagement = () => {
     setImageFiles([]);
     setExistingDocuments([]);
     setExistingImages([]);
+    setExistingPlans([]);
+    setExistingRender3D([]);
     setShowForm(false);
     setFormData({
       title: '',
@@ -234,6 +276,8 @@ const AdminInvestmentManagement = () => {
       featured: false,
       documents_path: '',
       images_path: '',
+    plans_path: '',
+    render_3d_path: '',
       description: '',
     });
   };
@@ -254,9 +298,11 @@ const AdminInvestmentManagement = () => {
       featured: Boolean(formData.featured),
       documents_path: parseList(formData.documents_path),
       images_path: parseList(formData.images_path),
+      plans_path: parseList(formData.plans_path),
+      render_3d_path: parseList(formData.render_3d_path),
     };
 
-    const hasFiles = documentFiles.length > 0 || imageFiles.length > 0;
+    const hasFiles = documentFiles.length > 0 || imageFiles.length > 0 || planFiles.length > 0 || render3DFiles.length > 0;
     const requestData = hasFiles ? new FormData() : payload;
 
     if (hasFiles) {
@@ -269,6 +315,8 @@ const AdminInvestmentManagement = () => {
       });
       documentFiles.forEach((file) => requestData.append('documents[]', file));
       imageFiles.forEach((file) => requestData.append('images[]', file));
+      planFiles.forEach((file) => requestData.append('plans[]', file));
+      render3DFiles.forEach((file) => requestData.append('render_3d[]', file));
     }
 
     try {

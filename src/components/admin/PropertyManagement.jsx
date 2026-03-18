@@ -7,6 +7,9 @@ import { Building, Trash2, Search, Eye, MapPin, Banknote, User, Calendar, Image,
 import { resolveMediaUrl } from '../../utils/media';
 import SecureImage from '../common/SecureImage';
 
+const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
+const ACCEPTED_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'];
+
 const initialFormData = {
   title: '',
   description: '',
@@ -38,6 +41,8 @@ const PropertyManagement = () => {
   const [types, setTypes] = useState([]);
   const [features, setFeatures] = useState([]);
   const [images, setImages] = useState([]);
+  const [planImages, setPlanImages] = useState([]);
+  const [render3DImages, setRender3DImages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -53,6 +58,21 @@ const PropertyManagement = () => {
   const isListOnlyView = viewParam === 'list' && !showCreateForm;
 
   const extractPayload = (response) => response?.data?.data ?? response?.data ?? [];
+
+  const validateFiles = (files, label) => {
+    for (const file of files) {
+      const extension = (file.name.split('.').pop() || '').toLowerCase();
+      const mimeType = (file.type || '').toLowerCase();
+      const validMime = ACCEPTED_IMAGE_TYPES.includes(mimeType);
+      const validExtension = ACCEPTED_IMAGE_EXTENSIONS.includes(extension);
+
+      if (!validMime || !validExtension) {
+        return `${label} : le fichier "${file.name}" n'est pas accepte. Formats autorises : JPG, JPEG, PNG, WEBP.`;
+      }
+    }
+
+    return '';
+  };
 
   useEffect(() => {
     loadProperties();
@@ -125,6 +145,8 @@ const PropertyManagement = () => {
   const resetForm = () => {
     setFormData(initialFormData);
     setImages([]);
+    setPlanImages([]);
+    setRender3DImages([]);
   };
 
   const handleInputChange = (event) => {
@@ -143,12 +165,67 @@ const PropertyManagement = () => {
 
   const handleImageUpload = (event) => {
     const files = Array.from(event.target.files || []);
+    const validationMessage = validateFiles(files, 'Images standards');
+    if (validationMessage) {
+      setError(validationMessage);
+      event.target.value = '';
+      return;
+    }
+    setError('');
     setImages((prev) => [...prev, ...files]);
   };
 
   const removeImage = (index) => {
     setImages((prev) => prev.filter((_, imageIndex) => imageIndex !== index));
   };
+
+  const handlePlanUpload = (event) => {
+    const files = Array.from(event.target.files || []);
+    const validationMessage = validateFiles(files, 'Plans de construction');
+    if (validationMessage) {
+      setError(validationMessage);
+      event.target.value = '';
+      return;
+    }
+    setError('');
+    setPlanImages((prev) => [...prev, ...files]);
+  };
+
+  const removePlanImage = (index) => {
+    setPlanImages((prev) => prev.filter((_, imageIndex) => imageIndex !== index));
+  };
+
+  const handleRender3DUpload = (event) => {
+    const files = Array.from(event.target.files || []);
+    const validationMessage = validateFiles(files, 'Representations 3D');
+    if (validationMessage) {
+      setError(validationMessage);
+      event.target.value = '';
+      return;
+    }
+    setError('');
+    setRender3DImages((prev) => [...prev, ...files]);
+  };
+
+  const removeRender3DImage = (index) => {
+    setRender3DImages((prev) => prev.filter((_, imageIndex) => imageIndex !== index));
+  };
+
+  const renderPreviewGrid = (files, onRemove, label) => (
+    files.length > 0 && (
+      <div>
+        <p className="text-sm font-medium mb-3">{label} ({files.length})</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {files.map((file, index) => (
+            <div key={`${file.name}-${index}`} className="relative">
+              <img src={URL.createObjectURL(file)} alt={`${label} ${index + 1}`} className="w-full h-24 object-cover rounded-lg" />
+              <button type="button" onClick={() => onRemove(index)} className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-[rgb(var(--clay))] text-white text-xs">x</button>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  );
 
   const handleCreateProperty = async (event) => {
     event.preventDefault();
@@ -161,6 +238,27 @@ const PropertyManagement = () => {
     }
 
     try {
+      const standardValidation = validateFiles(images, 'Images standards');
+      if (standardValidation) {
+        setError(standardValidation);
+        setSaving(false);
+        return;
+      }
+
+      const planValidation = validateFiles(planImages, 'Plans de construction');
+      if (planValidation) {
+        setError(planValidation);
+        setSaving(false);
+        return;
+      }
+
+      const renderValidation = validateFiles(render3DImages, 'Representations 3D');
+      if (renderValidation) {
+        setError(renderValidation);
+        setSaving(false);
+        return;
+      }
+
       const payload = new FormData();
       Object.entries(formData).forEach(([key, value]) => {
         if (key === 'feature_ids') {
@@ -175,6 +273,8 @@ const PropertyManagement = () => {
         payload.append(key, value);
       });
       images.forEach((image) => payload.append('images[]', image));
+      planImages.forEach((image) => payload.append('plan_images[]', image));
+      render3DImages.forEach((image) => payload.append('render_3d_images[]', image));
       await adminService.createProperty(payload);
       resetForm();
       setShowCreateForm(false);
@@ -368,23 +468,46 @@ const PropertyManagement = () => {
                 {renderFeatureSection()}
 
                 <div className="surface-panel p-6 space-y-6">
-                  <h2 className="text-lg font-semibold flex items-center gap-2"><Upload className="h-5 w-5" />Photos de la propriete</h2>
-                  <div className="border-2 border-dashed border-[rgb(var(--line))] rounded-xl p-8 text-center">
-                    <Upload className="h-10 w-10 text-[rgba(15,42,46,0.4)] mx-auto mb-3" />
-                    <p className="text-sm text-[rgba(15,42,46,0.6)] mb-4">Selectionnez au moins une image pour la propriete.</p>
-                    <input type="file" multiple accept="image/*" onChange={handleImageUpload} className="hidden" id="admin-property-image-upload" />
-                    <label htmlFor="admin-property-image-upload" className="btn-primary cursor-pointer inline-flex">Selectionner des photos</label>
-                  </div>
-                  {images.length > 0 && (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {images.map((image, index) => (
-                        <div key={`${image.name}-${index}`} className="relative">
-                          <img src={URL.createObjectURL(image)} alt={`Photo ${index + 1}`} className="w-full h-24 object-cover rounded-lg" />
-                          <button type="button" onClick={() => removeImage(index)} className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-[rgb(var(--clay))] text-white text-xs">x</button>
-                        </div>
-                      ))}
+                  <h2 className="text-lg font-semibold flex items-center gap-2"><Upload className="h-5 w-5" />Visuels du projet</h2>
+
+                  <div className="space-y-4">
+                    <div className="border-2 border-dashed border-[rgb(var(--line))] rounded-xl p-8 text-center">
+                      <Upload className="h-10 w-10 text-[rgba(15,42,46,0.4)] mx-auto mb-3" />
+                      <p className="text-sm font-medium mb-2">Images standards *</p>
+                      <p className="text-sm text-[rgba(15,42,46,0.6)] mb-4">
+                        Ajoutez les photos principales de la propriete.
+                      </p>
+                      <input type="file" multiple accept="image/*" onChange={handleImageUpload} className="hidden" id="admin-property-image-upload" />
+                      <label htmlFor="admin-property-image-upload" className="btn-primary cursor-pointer inline-flex">Selectionner des photos</label>
                     </div>
-                  )}
+                    {renderPreviewGrid(images, removeImage, 'Images standards selectionnees')}
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="border-2 border-dashed border-[rgb(var(--line))] rounded-xl p-8 text-center">
+                      <Upload className="h-10 w-10 text-[rgba(15,42,46,0.4)] mx-auto mb-3" />
+                      <p className="text-sm font-medium mb-2">Plans de construction</p>
+                      <p className="text-sm text-[rgba(15,42,46,0.6)] mb-4">
+                        Ajoutez des plans ou visuels techniques du projet.
+                      </p>
+                      <input type="file" multiple accept="image/*" onChange={handlePlanUpload} className="hidden" id="admin-plan-image-upload" />
+                      <label htmlFor="admin-plan-image-upload" className="btn-primary cursor-pointer inline-flex">Ajouter des plans</label>
+                    </div>
+                    {renderPreviewGrid(planImages, removePlanImage, 'Plans selectionnes')}
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="border-2 border-dashed border-[rgb(var(--line))] rounded-xl p-8 text-center">
+                      <Upload className="h-10 w-10 text-[rgba(15,42,46,0.4)] mx-auto mb-3" />
+                      <p className="text-sm font-medium mb-2">Representations 3D</p>
+                      <p className="text-sm text-[rgba(15,42,46,0.6)] mb-4">
+                        Ajoutez les rendus 3D et visuels de projection.
+                      </p>
+                      <input type="file" multiple accept="image/*" onChange={handleRender3DUpload} className="hidden" id="admin-render3d-image-upload" />
+                      <label htmlFor="admin-render3d-image-upload" className="btn-primary cursor-pointer inline-flex">Ajouter des visuels 3D</label>
+                    </div>
+                    {renderPreviewGrid(render3DImages, removeRender3DImage, 'Visuels 3D selectionnes')}
+                  </div>
                 </div>
 
                 <div className="flex justify-end gap-3">

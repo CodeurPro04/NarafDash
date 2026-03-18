@@ -205,6 +205,11 @@ const UserManagement = () => {
                                 {user.agent_type}
                               </span>
                             )}
+                            {user.partner_type && (user.role?.slug === 'entreprise' || user.role === 'entreprise') && (
+                              <span className="inline-flex items-center rounded-full border border-[rgba(15,42,46,0.12)] bg-white/60 px-3 py-1 text-xs font-medium text-[rgba(15,42,46,0.7)]">
+                                {user.partner_type}
+                              </span>
+                            )}
                             {!user.is_active && (
                               <span className="inline-flex items-center gap-2 rounded-full bg-[rgba(199,109,74,0.12)] px-3 py-1 text-xs font-semibold text-[rgb(var(--clay))]">
                                 <span className="h-2 w-2 rounded-full bg-[rgb(var(--clay))]" />
@@ -229,6 +234,11 @@ const UserManagement = () => {
                         <Phone className="h-4 w-4" />
                         {user.phone || 'Non spécifié'}
                       </div>
+                      {user.partner_type && (user.role?.slug === 'entreprise' || user.role === 'entreprise') && (
+                        <div className="text-xs font-medium text-[rgba(15,42,46,0.75)]">
+                          Type de partenaire : {user.partner_type}
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex gap-2">
