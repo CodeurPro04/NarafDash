@@ -252,9 +252,9 @@ const DashboardAdmin = () => {
       onClick: () => navigate('/admin/investments?view=requests'),
     },
     {
-      label: 'Historique clients',
-      description: 'Suivi et offres conclues',
-      onClick: () => navigate('/admin/clients?view=history'),
+      label: 'Demandes clients',
+      description: 'Traiter, assigner et suivre',
+      onClick: () => navigate('/admin/clients?view=pending'),
     },
   ];
 

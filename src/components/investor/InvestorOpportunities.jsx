@@ -112,7 +112,7 @@ const InvestorOpportunities = () => {
                     </div>
                     <div className="flex items-center gap-2 text-xs text-[rgba(15,42,46,0.5)]">
                       <Wallet className="h-4 w-4" />
-                      {project.min_investment ? `Min: ${project.min_investment}` : 'Montant libre'}
+                      {project.min_investment ? `Min: ${formatFcfa(project.min_investment)}` : 'Montant libre'}
                     </div>
                     <div className="flex justify-end">
                       <button onClick={() => openProposal(project)} className="btn-primary">

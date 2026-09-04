@@ -17,6 +17,7 @@ import AdminPropertyCatalog from "./components/admin/AdminPropertyCatalog";
 import AdminProfile from "./components/admin/AdminProfile";
 import AdminInvestmentManagement from "./components/admin/AdminInvestmentManagement";
 import AdminPartnershipManagement from "./components/admin/AdminPartnershipManagement";
+import AdminPartnerProductsValidation from "./components/admin/AdminPartnerProductsValidation";
 import AdminHouseModelsManagement from "./components/admin/AdminHouseModelsManagement";
 import AdminReports from "./components/admin/AdminReports";
 import DashboardManager from "./components/manager/DashboardManager";
@@ -150,6 +151,14 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
                   <AdminPartnershipManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/partner-products"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
+                  <AdminPartnerProductsValidation />
                 </ProtectedRoute>
               }
             />

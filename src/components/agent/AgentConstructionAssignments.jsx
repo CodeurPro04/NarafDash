@@ -165,7 +165,7 @@ const AgentConstructionAssignments = () => {
                       <div>
                         <p className="text-sm font-medium">{project.title || 'Projet construction'}</p>
                         <p className="text-xs text-[rgba(15,42,46,0.5)]">
-                          {project.city || project.location || 'Localisation'} | Budget {project.budget_min ? Number(project.budget_min).toLocaleString() : 'N/A'}
+                          {project.city || project.location || 'Localisation'} | Budget {formatFcfa(project.budget_min)}
                         </p>
                         <p className="text-xs text-[rgba(15,42,46,0.5)] mt-1">
                           {formatRequester(project.user)}
@@ -231,7 +231,7 @@ const AgentConstructionAssignments = () => {
                       <div>
                         <p className="text-sm font-medium">{project.title || 'Projet construction'}</p>
                         <p className="text-xs text-[rgba(15,42,46,0.5)]">
-                          {project.city || project.location || 'Localisation'} | Budget {project.budget_min ? Number(project.budget_min).toLocaleString() : 'N/A'}
+                          {project.city || project.location || 'Localisation'} | Budget {formatFcfa(project.budget_min)}
                         </p>
                         <p className="text-xs text-[rgba(15,42,46,0.5)] mt-1">
                           {formatRequester(project.user)}

@@ -82,7 +82,7 @@ const InvestorProposals = () => {
                             {proposal.investment_project?.title || 'Projet investissement'}
                           </p>
                           <p className="text-xs text-[rgba(15,42,46,0.5)]">
-                            Montant: {proposal.amount || 'N/A'}
+                            Montant: {formatFcfa(proposal.amount)}
                           </p>
                         </div>
                       </div>

@@ -8,7 +8,7 @@ const normalizeApiBase = (rawUrl) => {
 
 // Configuration de base d'Axios
 const rawBaseUrl =
-  import.meta.env.VITE_API_URL || "http://localhost:8000"; /* Valeur par défaut pour le développement local */
+  import.meta.env.VITE_API_URL || "https://api.africabuildinvest.com"; /* Valeur par défaut pour le développement local */
 const apiBaseUrl = normalizeApiBase(rawBaseUrl);
 const api = axios.create({
   baseURL: `${apiBaseUrl}/api`,
@@ -488,6 +488,16 @@ export const agentService = {
   // Demandes de recherche
   getAssignedSearchRequests: () =>
     api.get("/v1/agent/search-requests/assigned"),
+  getSearchRequestHistory: () =>
+    api.get("/v1/agent/search-requests/history"),
+  approveSearchRequest: (uuid) =>
+    api.post(`/v1/agent/search-requests/${uuid}/approve`),
+  rejectSearchRequest: (uuid, data) =>
+    api.post(`/v1/agent/search-requests/${uuid}/reject`, data),
+  addSearchRequestReport: (uuid, data) =>
+    api.post(`/v1/agent/search-requests/${uuid}/reports`, data),
+  concludeSearchRequestDeal: (uuid, data) =>
+    api.post(`/v1/agent/search-requests/${uuid}/conclude`, data),
   fulfillSearchRequest: (uuid, data) =>
     api.post(`/v1/agent/search-requests/${uuid}/fulfill`, data),
 
@@ -629,6 +639,14 @@ export const investorService = {
 // ====================
 // SERVICES ENTREPRISE PARTENAIRE (COMPANY)
 // ====================
+
+// Produits partenaires — admin & gestionnaire
+export const partnerProductService = {
+  getPending: () => api.get("/v1/admin/partner-products/pending"),
+  getAll: (params) => api.get("/v1/admin/partner-products/all", { params }),
+  approve: (uuid) => api.post(`/v1/admin/partner-products/${uuid}/approve`),
+  reject: (uuid, reason) => api.post(`/v1/admin/partner-products/${uuid}/reject`, { reason }),
+};
 
 export const companyService = {
   applyForPartnership: (data) =>

@@ -65,7 +65,7 @@ const Login = () => {
         <div className="text-center mb-8">
           <div className="h-16 w-16 text-white flex items-center justify-center mx-auto">     
               <img
-                src="/images/logonaraf.png"
+                src="/images/logoabi2.png"
                 alt="NARAF Immobilier"
                 className="h-8 w-auto object-contain"
               />

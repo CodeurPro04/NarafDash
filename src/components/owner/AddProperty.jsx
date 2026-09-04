@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
 import { ownerService, propertyTypeService } from '../../services/api';
 import { Building, Upload, MapPin, Euro, FileText, ArrowLeft, Save } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { getTypeRules, resetHiddenFields } from '../../utils/propertyTypeRules';
 
 const AddProperty = () => {
   const navigate = useNavigate();
@@ -60,8 +61,22 @@ const AddProperty = () => {
     }
   };
 
+  const activeRules = useMemo(
+    () => getTypeRules(types, formData.property_type_id),
+    [types, formData.property_type_id]
+  );
+
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
+    if (name === 'property_type_id') {
+      const newRules = getTypeRules(types, value);
+      setFormData((prev) => resetHiddenFields(newRules, {
+        ...prev,
+        property_type_id: value,
+        feature_ids: newRules.showFeatures ? prev.feature_ids : [],
+      }));
+      return;
+    }
     setFormData((prev) => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
@@ -312,29 +327,31 @@ const AddProperty = () => {
                   Caractéristiques
                 </h2>
 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {[
-                    { label: 'Surface (m²)', name: 'surface_area' },
-                    { label: 'Terrain (m²)', name: 'land_area' },
-                    { label: 'Chambres', name: 'bedrooms' },
-                    { label: 'Salles de bain', name: 'bathrooms' },
-                    { label: 'Parking', name: 'parking_spaces' },
-                    { label: 'Étage', name: 'floor_number' },
-                    { label: 'Étages total', name: 'total_floors' },
-                    { label: 'Année', name: 'year_built' },
-                  ].map((field) => (
-                    <div key={field.name}>
-                      <label className="block text-xs text-[rgba(15,42,46,0.6)] mb-1">{field.label}</label>
-                      <input
-                        type="number"
-                        name={field.name}
-                        value={formData[field.name]}
-                        onChange={handleInputChange}
-                        className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-3 py-2 text-sm"
-                      />
-                    </div>
-                  ))}
-                </div>
+                {activeRules.hint && (
+                  <p className="text-sm text-[rgba(15,42,46,0.6)] bg-[rgba(15,42,46,0.04)] px-4 py-3 rounded-xl">
+                    ℹ️ {activeRules.hint}
+                  </p>
+                )}
+                {activeRules.fields.length === 0 ? (
+                  <p className="text-sm text-[rgba(15,42,46,0.4)] italic">Aucune caractéristique spécifique pour ce type de bien.</p>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {activeRules.fields.map((field) => (
+                      <div key={field.key}>
+                        <label className="block text-xs text-[rgba(15,42,46,0.6)] mb-1">{field.label}</label>
+                        <input
+                          type="number"
+                          name={field.key}
+                          required={field.required}
+                          value={formData[field.key]}
+                          onChange={handleInputChange}
+                          min="0"
+                          className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-3 py-2 text-sm"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="surface-panel p-6 space-y-6">
@@ -388,22 +405,24 @@ const AddProperty = () => {
                 </div>
               </div>
 
-              <div className="surface-panel p-6 space-y-6">
-                <h2 className="text-lg font-semibold">Équipements</h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {features.map((feature) => (
-                    <label key={feature.id} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={formData.feature_ids.includes(feature.id)}
-                        onChange={() => toggleFeature(feature.id)}
-                        className="rounded border-[rgb(var(--line))]"
-                      />
-                      {feature.name}
-                    </label>
-                  ))}
+              {activeRules.showFeatures && features.length > 0 && (
+                <div className="surface-panel p-6 space-y-6">
+                  <h2 className="text-lg font-semibold">Équipements</h2>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {features.map((feature) => (
+                      <label key={feature.id} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={formData.feature_ids.includes(feature.id)}
+                          onChange={() => toggleFeature(feature.id)}
+                          className="rounded border-[rgb(var(--line))]"
+                        />
+                        {feature.name}
+                      </label>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="surface-panel p-6 space-y-6">
                 <h2 className="text-lg font-semibold flex items-center gap-2">

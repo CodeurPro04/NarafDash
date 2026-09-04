@@ -278,7 +278,13 @@ const AgentPropertyManagement = () => {
                         <Eye className="h-4 w-4" />
                         Details
                       </button>
-                      <button onClick={() => openEditModal(property)} className="btn-ghost flex-1" disabled={!canEditProperty(property)}>
+                      <button
+                        onClick={() => openEditModal(property)}
+                        className={`btn-ghost flex-1 ${canEditProperty(property) ? '' : 'cursor-not-allowed border-[rgba(15,42,46,0.08)] bg-[rgba(15,42,46,0.06)] text-[rgba(15,42,46,0.35)] hover:border-[rgba(15,42,46,0.08)] hover:bg-[rgba(15,42,46,0.06)] hover:text-[rgba(15,42,46,0.35)]'}`}
+                        disabled={!canEditProperty(property)}
+                        aria-disabled={!canEditProperty(property)}
+                        title={!canEditProperty(property) ? 'Cette propriete est en lecture seule.' : 'Modifier la propriete'}
+                      >
                         <Edit className="h-4 w-4" />
                         Modifier
                       </button>

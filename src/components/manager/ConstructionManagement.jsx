@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
 import { adminService, managerService, publicConstructionService } from '../../services/api';
+import { formatFcfaRange } from '../../utils/currency';
 import { useAuth } from '../../contexts/AuthContext';
 import { Save, Trash2, Plus, HardHat, Search } from 'lucide-react';
 
@@ -54,7 +55,7 @@ const ConstructionManagement = () => {
   ), [user?.role]);
 
   const roleLabel = user?.role === 'admin' ? 'Administration' : 'Gestionnaire';
-  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+  const apiBase = import.meta.env.VITE_API_URL || 'https://api.africabuildinvest.com';
   const storageBase = apiBase.replace(/\/api\/?$/, '');
   const getStorageUrl = (path) => {
     if (!path) return '';
@@ -734,8 +735,7 @@ const ConstructionManagement = () => {
                             {project.city || project.location || 'Localisation'}
                           </p>
                           <p className="text-xs text-[rgba(15,42,46,0.6)]">
-                            Budget: {project.budget_min ? Number(project.budget_min).toLocaleString() : 'N/A'}
-                            {project.budget_max ? ` - ${Number(project.budget_max).toLocaleString()}` : ''}
+                            Budget: {formatFcfaRange(project.budget_min, project.budget_max)}
                           </p>
                           <p className="text-xs text-[rgba(15,42,46,0.6)]">
                             Surface: {project.surface_area ? `${project.surface_area} m2` : 'N/A'}
@@ -820,8 +820,7 @@ const ConstructionManagement = () => {
                     <div>
                       <p className="text-xs text-[rgba(15,42,46,0.45)]">Budget</p>
                       <p className="font-medium">
-                        {selectedProject.budget_min ? Number(selectedProject.budget_min).toLocaleString() : 'N/A'}
-                        {selectedProject.budget_max ? ` - ${Number(selectedProject.budget_max).toLocaleString()}` : ''}
+                        {formatFcfaRange(selectedProject.budget_min, selectedProject.budget_max)}
                       </p>
                     </div>
                     <div>

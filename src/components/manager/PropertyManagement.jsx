@@ -6,6 +6,7 @@ import { managerService, propertyTypeService } from '../../services/api';
 import { Building, Search, Eye, MapPin, Banknote, User, Calendar, Image, Plus, Upload, Save } from 'lucide-react';
 import { resolveMediaUrl } from '../../utils/media';
 import SecureImage from '../common/SecureImage';
+import { getTypeRules, resetHiddenFields } from '../../utils/propertyTypeRules';
 
 const initialFormData = {
   title: '',
@@ -131,8 +132,22 @@ const PropertyManagement = () => {
     setRender3DImages([]);
   };
 
+  const activeRules = useMemo(
+    () => getTypeRules(types, formData.property_type_id),
+    [types, formData.property_type_id]
+  );
+
   const handleInputChange = (event) => {
     const { name, value, type, checked } = event.target;
+    if (name === 'property_type_id') {
+      const newRules = getTypeRules(types, value);
+      setFormData((prev) => resetHiddenFields(newRules, {
+        ...prev,
+        property_type_id: value,
+        feature_ids: newRules.showFeatures ? prev.feature_ids : [],
+      }));
+      return;
+    }
     setFormData((prev) => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
@@ -247,7 +262,7 @@ const PropertyManagement = () => {
     }
   };
 
-  const renderFeatureSection = () => (
+  const renderFeatureSection = () => activeRules.showFeatures && features.length > 0 ? (
     <div className="surface-panel p-6 space-y-6">
       <h2 className="text-lg font-semibold">Equipements</h2>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -264,7 +279,7 @@ const PropertyManagement = () => {
         ))}
       </div>
     </div>
-  );
+  ) : null;
 
   return (
     <div className="app-shell flex">
@@ -365,23 +380,23 @@ const PropertyManagement = () => {
 
                 <div className="surface-panel p-6 space-y-6">
                   <h2 className="text-lg font-semibold flex items-center gap-2"><Building className="h-5 w-5" />Caracteristiques</h2>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {[
-                      ['surface_area', 'Surface (m2)'],
-                      ['land_area', 'Terrain (m2)'],
-                      ['bedrooms', 'Chambres'],
-                      ['bathrooms', 'Salles de bain'],
-                      ['parking_spaces', 'Parking'],
-                      ['floor_number', 'Etage'],
-                      ['total_floors', 'Etages total'],
-                      ['year_built', 'Annee'],
-                    ].map(([name, label]) => (
-                      <div key={name}>
-                        <label className="block text-xs text-[rgba(15,42,46,0.6)] mb-1">{label}</label>
-                        <input type="number" name={name} value={formData[name]} onChange={handleInputChange} className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-3 py-2 text-sm" />
-                      </div>
-                    ))}
-                  </div>
+                  {activeRules.hint && (
+                    <p className="text-sm text-[rgba(15,42,46,0.6)] bg-[rgba(15,42,46,0.04)] px-4 py-3 rounded-xl">
+                      ℹ️ {activeRules.hint}
+                    </p>
+                  )}
+                  {activeRules.fields.length === 0 ? (
+                    <p className="text-sm text-[rgba(15,42,46,0.4)] italic">Aucune caractéristique spécifique pour ce type de bien.</p>
+                  ) : (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {activeRules.fields.map((field) => (
+                        <div key={field.key}>
+                          <label className="block text-xs text-[rgba(15,42,46,0.6)] mb-1">{field.label}</label>
+                          <input type="number" name={field.key} required={field.required} value={formData[field.key]} onChange={handleInputChange} min="0" className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-3 py-2 text-sm" />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="surface-panel p-6 space-y-6">

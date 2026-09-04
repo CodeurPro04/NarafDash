@@ -3,6 +3,7 @@ import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
 import { investorService } from '../../services/api';
 import { BarChart3 } from 'lucide-react';
+import { formatFcfa } from '../../utils/currency';
 
 const InvestorPortfolio = () => {
   const [proposals, setProposals] = useState([]);
@@ -61,7 +62,7 @@ const InvestorPortfolio = () => {
               <div>
                 <p className="text-sm text-[rgba(15,42,46,0.6)]">Total investi</p>
                 <p className="text-3xl font-semibold mt-2">
-                  {loading ? '...' : total.toLocaleString()}
+                  {loading ? '...' : formatFcfa(total)}
                 </p>
               </div>
               <div className="h-12 w-12 rounded-2xl bg-[rgba(15,42,46,0.08)] flex items-center justify-center">
@@ -84,7 +85,7 @@ const InvestorPortfolio = () => {
                         {proposal.investment_project?.title || 'Projet investissement'}
                       </p>
                       <p className="text-xs text-[rgba(15,42,46,0.5)]">
-                        Montant: {proposal.amount || 'N/A'}
+                        Montant: {formatFcfa(proposal.amount)}
                       </p>
                     </div>
                     <span className="chip">Approuve</span>

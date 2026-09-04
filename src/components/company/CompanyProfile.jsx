@@ -26,7 +26,7 @@ const CompanyProfile = () => {
     certifications: '',
   });
 
-  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+  const apiBase = import.meta.env.VITE_API_URL || 'https://api.africabuildinvest.com';
   const storageBase = apiBase.replace(/\/api\/?$/, '');
   const getLogoUrl = (path) => {
     if (!path) return '';

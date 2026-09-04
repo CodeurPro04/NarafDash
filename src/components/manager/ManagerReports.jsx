@@ -17,12 +17,14 @@ const formatAmount = (value) => `${Math.round(value || 0).toLocaleString('fr-FR'
 const requestTypeLabel = (type) => {
   if (type === 'construction') return 'Construction';
   if (type === 'investissement') return 'Investissement';
+  if (type === 'recherche') return 'Recherche';
   return 'Propriete';
 };
 
 const typeIcon = (type) => {
   if (type === 'construction') return HardHat;
   if (type === 'investissement') return TrendingUp;
+  if (type === 'recherche') return UserCheck;
   return Building;
 };
 
@@ -47,19 +49,31 @@ const ManagerReports = () => {
       try {
         setLoading(true);
         setError('');
-        const response = await managerService.getClientRequestHistory();
-        const payload = response?.data?.data ?? response?.data ?? [];
-        const items = payload?.data || payload;
-        const list = Array.isArray(items) ? items : [];
-        const concludedDeals = list
+        const [clientResponse, searchResponse] = await Promise.all([
+          managerService.getClientRequestHistory(),
+          managerService.getSearchRequestHistory(),
+        ]);
+
+        const clientPayload = clientResponse?.data?.data ?? clientResponse?.data ?? [];
+        const clientItems = clientPayload?.data || clientPayload;
+        const clientList = Array.isArray(clientItems) ? clientItems : [];
+
+        const searchPayload = searchResponse?.data?.data ?? searchResponse?.data ?? [];
+        const searchItems = searchPayload?.data || searchPayload;
+        const searchList = Array.isArray(searchItems) ? searchItems : [];
+
+        const concludedDeals = [...clientList, ...searchList]
           .filter((item) => item?.status === 'deal_concluded' || item?.deal_status === 'deal_concluded')
           .map((item) => {
             const finalReport = Array.isArray(item.reports)
               ? item.reports.find((report) => report?.report_type === 'final_report')
               : null;
             const salePrice = finalReport?.sale_price || item?.deal_sale_price || '';
+            const requestType = item?.request_type || (item?.property_type || item?.propertyType ? 'recherche' : 'immobilier');
             return {
               ...item,
+              request_type: requestType,
+              name: item?.name || (item?.user ? `${item.user.first_name || ''} ${item.user.last_name || ''}`.trim() : 'Client'),
               gainAmount: parseAmount(salePrice),
               gainLabel: salePrice || 'Non renseigne',
               finalReport,
@@ -83,6 +97,7 @@ const ManagerReports = () => {
     const propertyDeals = deals.filter((deal) => (deal.request_type || 'immobilier') === 'immobilier');
     const constructionDeals = deals.filter((deal) => deal.request_type === 'construction');
     const investmentDeals = deals.filter((deal) => deal.request_type === 'investissement');
+    const searchDeals = deals.filter((deal) => deal.request_type === 'recherche');
 
     return {
       totalAmount: deals.reduce((sum, deal) => sum + deal.gainAmount, 0),
@@ -90,9 +105,11 @@ const ManagerReports = () => {
       propertyAmount: propertyDeals.reduce((sum, deal) => sum + deal.gainAmount, 0),
       constructionAmount: constructionDeals.reduce((sum, deal) => sum + deal.gainAmount, 0),
       investmentAmount: investmentDeals.reduce((sum, deal) => sum + deal.gainAmount, 0),
+      searchAmount: searchDeals.reduce((sum, deal) => sum + deal.gainAmount, 0),
       propertyDeals: propertyDeals.length,
       constructionDeals: constructionDeals.length,
       investmentDeals: investmentDeals.length,
+      searchDeals: searchDeals.length,
     };
   }, [deals]);
 
@@ -119,7 +136,7 @@ const ManagerReports = () => {
               <div className="surface-panel p-6 text-sm text-[rgba(15,42,46,0.6)]">Chargement...</div>
             ) : (
               <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
                   <StatCard
                     icon={Banknote}
                     label="Gains totaux"
@@ -143,6 +160,12 @@ const ManagerReports = () => {
                     label="Gains investissement"
                     value={formatAmount(summary.investmentAmount)}
                     note={`${summary.investmentDeals} offre(s) conclue(s)`}
+                  />
+                  <StatCard
+                    icon={UserCheck}
+                    label="Gains recherche"
+                    value={formatAmount(summary.searchAmount)}
+                    note={`${summary.searchDeals} offre(s) conclue(s)`}
                   />
                 </div>
 
@@ -209,7 +232,7 @@ const ManagerReports = () => {
                                   <div>
                                     <p className="text-xs text-[rgba(15,42,46,0.42)]">Cible</p>
                                     <p className="font-medium text-[rgb(var(--ink))]">
-                                      {deal.property?.title || deal.construction_project?.title || deal.investment_project?.title || 'Projet ou bien non renseigne'}
+                                      {deal.property?.title || deal.construction_project?.title || deal.investment_project?.title || deal.property_type?.name || deal.propertyType?.name || (deal.request_type === 'recherche' ? 'Recherche de bien' : 'Projet ou bien non renseigne')}
                                     </p>
                                   </div>
                                   <div>

@@ -214,9 +214,9 @@ const DashboardManager = () => {
       onClick: () => navigate('/manager/investments?view=requests'),
     },
     {
-      label: 'Historique clients',
-      description: 'Suivi et offres conclues',
-      onClick: () => navigate('/manager/clients?view=history'),
+      label: 'Demandes clients',
+      description: 'Traiter, assigner et suivre',
+      onClick: () => navigate('/manager/clients?view=pending'),
     },
   ];
 

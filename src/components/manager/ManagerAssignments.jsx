@@ -1107,25 +1107,6 @@ const ManagerAssignments = () => {
               <div className={`${isPropertyView ? 'xl:col-span-2' : ''} ${isPropertyView ? 'space-y-6' : 'surface-panel p-6 space-y-4'}`}>
                 {isPropertyView ? (
                   <>
-                    <ClientRequestDomainSections
-                      requestType="immobilier"
-                      requests={scopedPropertyClientRequests}
-                      history={[]}
-                      agents={agents}
-                      assignments={assignments}
-                      setAssignments={setAssignments}
-                      loading={loading}
-                      onApprove={handleApproveDomainClientRequest}
-                      onOpenReject={openDomainClientRejectModal}
-                      onAssign={handleAssignDomainClientRequest}
-                      onOpenHistoryReason={(item) => setHistoryModal({ open: true, item, title: rejectionModalTitle(item) })}
-                      pendingTitle="Demandes clients de propriete"
-                      pendingDescription="Traitez d'abord les demandes immobilieres envoyees par les clients, puis consultez leur historique."
-                      historyTitle=""
-                      emptyPendingLabel="Aucune demande client en attente."
-                      emptyHistoryLabel=""
-                    />
-
                     <div className="surface-panel p-6 space-y-4">
                       <div className="flex items-center gap-2">
                         <Home className="h-5 w-5" />

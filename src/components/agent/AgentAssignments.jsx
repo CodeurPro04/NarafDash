@@ -5,6 +5,7 @@ import Sidebar from '../common/Sidebar';
 import { agentService } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { normalizeAgentType } from '../../utils/agentType';
+import { formatFcfa, formatFcfaRange } from '../../utils/currency';
 import {
   ClipboardList,
   Building,
@@ -123,14 +124,23 @@ const AgentAssignments = () => {
     return isPropertyClientRequest(item);
   };
   const clientAssignedFlow = useMemo(
-    () => clientTimeline.filter((item) => (
-      ['assigned', 'approved', 'agent_approved', 'rejected', 'agent_rejected', 'deal_concluded'].includes(item.status)
+    () => clientRequests.filter((item) => (
+      item.status === 'assigned'
       && isRelevantClientRequest(item)
     )),
-    [clientTimeline, agentType]
+    [clientRequests, agentType]
+  );
+  const clientAssignedHistory = useMemo(
+    () => clientHistory.filter((item) => (
+      item.status !== 'assigned'
+      && ['approved', 'agent_approved', 'rejected', 'agent_rejected', 'deal_concluded'].includes(item.status)
+      && isRelevantClientRequest(item)
+    )),
+    [clientHistory, agentType]
   );
   const isPropertyAssignedView = agentType === 'immobilier' && currentView === 'properties';
   const isClientAssignedView = ['immobilier', 'constructeur', 'investissement'].includes(agentType) && currentView === 'clients';
+  const isClientHistoryView = ['immobilier', 'constructeur', 'investissement'].includes(agentType) && currentView === 'history';
   const showConstructionWorkspace = agentType === 'constructeur';
 
   const tabButton = (key, label, count) => (
@@ -384,7 +394,9 @@ const AgentAssignments = () => {
                   ? 'Proprietes assignees'
                   : isClientAssignedView
                     ? 'Clients assignes'
-                    : 'Assignations'}
+                    : isClientHistoryView
+                      ? 'Historique clients assignes'
+                      : 'Assignations'}
               </h1>
               <p className="text-sm text-[rgba(15,42,46,0.6)] mt-2">
                 {isPropertyAssignedView
@@ -395,7 +407,9 @@ const AgentAssignments = () => {
                       : agentType === 'investissement'
                         ? 'Consultez, acceptez ou refusez vos dossiers clients lies a l investissement, puis transmettez vos rapports a l administrateur.'
                       : 'Consultez, acceptez ou refusez vos clients assignes, puis transmettez vos rapports a l administrateur.'
-                    : 'Tout ce qui vous est assigne, avec un suivi clair et l\'historique.'}
+                    : isClientHistoryView
+                      ? 'Consultez les clients assignes deja traites, les rapports envoyes et les deals conclus visibles aussi par l administration.'
+                      : 'Tout ce qui vous est assigne, avec un suivi clair et l\'historique.'}
               </p>
             </div>
 
@@ -403,7 +417,7 @@ const AgentAssignments = () => {
               <div className="surface-panel p-4 text-sm text-[rgb(var(--clay))]">{error}</div>
             )}
 
-            {!isPropertyAssignedView && !isClientAssignedView && (
+            {!isPropertyAssignedView && !isClientAssignedView && !isClientHistoryView && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="surface-panel p-5">
                   <p className="text-xs text-[rgba(15,42,46,0.55)]">Proprietes assignees</p>
@@ -441,10 +455,12 @@ const AgentAssignments = () => {
                     ? 'Proprietes immobilieres assignees'
                     : isClientAssignedView
                       ? 'Clients assignes'
-                      : 'Assignations & Historique'}
+                      : isClientHistoryView
+                        ? 'Historique clients assignes'
+                        : 'Assignations & Historique'}
                 </h2>
               </div>
-              {!isPropertyAssignedView && !isClientAssignedView && (
+              {!isPropertyAssignedView && !isClientAssignedView && !isClientHistoryView && (
                 <div className="flex flex-wrap gap-2">
                   {tabButton('clients', 'Clients', clientRequests.length)}
                   {tabButton('properties', 'Proprietes', assignedProperties.length)}
@@ -561,13 +577,10 @@ const AgentAssignments = () => {
                                 </div>
                               )}
                               {['rejected', 'agent_rejected'].includes(item.status) && item.rejection_reason && (
-                                <button
-                                  type="button"
-                                  className="btn-ghost text-[rgb(var(--clay))]"
-                                  onClick={() => openReasonModal('Motif du refus client', item.rejection_reason)}
-                                >
-                                  Voir le motif
-                                </button>
+                                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-700">
+                                  <p className="font-semibold">Motif du refus</p>
+                                  <p className="mt-2 whitespace-pre-wrap">{item.rejection_reason}</p>
+                                </div>
                               )}
                               {hasAcceptedClientFlow(item) && (
                                 <div className="space-y-4 rounded-[28px] border border-[rgba(15,42,46,0.08)] bg-white/80 p-5">
@@ -679,7 +692,7 @@ const AgentAssignments = () => {
                                       <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                                         <div className="rounded-2xl bg-white px-3 py-3">
                                           <p className="text-[rgba(15,42,46,0.45)]">Prix final</p>
-                                          <p className="mt-1 font-medium text-[rgb(var(--ink))]">{deal.sale_price || 'Non renseigne'}</p>
+                                          <p className="mt-1 font-medium text-[rgb(var(--ink))]">{formatFcfa(deal.sale_price, 'Non renseigne')}</p>
                                         </div>
                                         <div className="rounded-2xl bg-white px-3 py-3">
                                           <p className="text-[rgba(15,42,46,0.45)]">Statut</p>
@@ -703,7 +716,117 @@ const AgentAssignments = () => {
                 )
               )}
 
-              {!isPropertyAssignedView && !isClientAssignedView && activeTab === 'clients' && (
+              {isClientHistoryView && (
+                loading ? renderEmpty('Chargement...') : clientAssignedHistory.length === 0 ? (
+                  renderEmpty('Aucun historique client assigne.')
+                ) : (
+                  <div className="space-y-3">
+                    {clientAssignedHistory.map((item) => (
+                      <div key={item.uuid} className="surface-soft px-4 py-4 space-y-4">
+                        {(() => {
+                          const tracking = trackingFor(item);
+                          const deal = tracking.deal;
+                          const reports = tracking.events.filter((entry) => entry.type === 'progress_report');
+                          return (
+                            <>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-sm font-medium">{item.name}</p>
+                                <span className="chip">Type: {requestTypeLabel(item.request_type)}</span>
+                                {renderStatusPill(item.status || 'assigned')}
+                                {deal?.status === 'deal_concluded' && (
+                                  <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                                    Deal conclut
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-[rgba(15,42,46,0.55)] break-words">{item.message}</p>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 text-xs">
+                                <div className="rounded-2xl border border-[rgb(var(--line))] bg-white/75 px-3 py-3">
+                                  <p className="text-[rgba(15,42,46,0.45)]">Email</p>
+                                  <p className="mt-1 font-medium text-[rgb(var(--ink))] break-all">{item.email || 'Non fourni'}</p>
+                                </div>
+                                <div className="rounded-2xl border border-[rgb(var(--line))] bg-white/75 px-3 py-3">
+                                  <p className="text-[rgba(15,42,46,0.45)]">Telephone</p>
+                                  <p className="mt-1 font-medium text-[rgb(var(--ink))]">{item.phone || 'Non fourni'}</p>
+                                </div>
+                                <div className="rounded-2xl border border-[rgb(var(--line))] bg-white/75 px-3 py-3">
+                                  <p className="text-[rgba(15,42,46,0.45)]">Cible</p>
+                                  <p className="mt-1 font-medium text-[rgb(var(--ink))]">{clientTargetLabel(item)}</p>
+                                </div>
+                                <div className="rounded-2xl border border-[rgb(var(--line))] bg-white/75 px-3 py-3">
+                                  <p className="text-[rgba(15,42,46,0.45)]">Decision</p>
+                                  <p className="mt-1 font-medium text-[rgb(var(--ink))]">{decisionLabel(item.status)}</p>
+                                </div>
+                              </div>
+                              {['rejected', 'agent_rejected'].includes(item.status) && item.rejection_reason && (
+                                <button
+                                  type="button"
+                                  className="btn-ghost text-[rgb(var(--clay))]"
+                                  onClick={() => openReasonModal('Motif du refus client', item.rejection_reason)}
+                                >
+                                  Voir le motif
+                                </button>
+                              )}
+                              <div className="space-y-4 rounded-[28px] border border-[rgba(15,42,46,0.08)] bg-white/80 p-5">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                  <div>
+                                    <p className="text-sm font-semibold text-[rgb(var(--ink))]">Historique du client</p>
+                                    <p className="text-xs text-[rgba(15,42,46,0.55)]">Consultez les rapports d'avancement et la conclusion finale envoyes a l'administration.</p>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-2 text-xs text-[rgba(15,42,46,0.55)]">
+                                    <span className="chip">{reports.length} rapport{reports.length > 1 ? 's' : ''}</span>
+                                    <span className="chip">{deal?.status === 'deal_concluded' ? 'Clos' : 'Archive'}</span>
+                                  </div>
+                                </div>
+                                {reports.length > 0 ? (
+                                  <div className="space-y-3">
+                                    {reports.map((report) => (
+                                      <div key={report.id} className="rounded-2xl border border-[rgb(var(--line))] bg-[rgba(245,248,248,0.9)] px-4 py-4">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                          <div className="inline-flex items-center gap-2 text-sm font-medium text-[rgb(var(--ink))]">
+                                            <FileText className="h-4 w-4" />
+                                            Rapport d'avancement
+                                          </div>
+                                          <span className="text-xs text-[rgba(15,42,46,0.45)]">{formatDateTime(report.created_at)}</span>
+                                        </div>
+                                        <p className="mt-3 text-sm text-[rgba(15,42,46,0.72)] whitespace-pre-wrap">{report.content}</p>
+                                        <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                                          <div className="rounded-2xl bg-white px-3 py-3"><p className="text-[rgba(15,42,46,0.45)]">Resume</p><p className="mt-1 font-medium text-[rgb(var(--ink))]">{report.meta?.summary || 'Non renseigne'}</p></div>
+                                          <div className="rounded-2xl bg-white px-3 py-3"><p className="text-[rgba(15,42,46,0.45)]">Retour client</p><p className="mt-1 font-medium text-[rgb(var(--ink))]">{report.meta?.client_feedback || 'Non renseigne'}</p></div>
+                                          <div className="rounded-2xl bg-white px-3 py-3"><p className="text-[rgba(15,42,46,0.45)]">Prochaine etape</p><p className="mt-1 font-medium text-[rgb(var(--ink))]">{report.meta?.next_step || 'Non renseigne'}</p></div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="text-sm text-[rgba(15,42,46,0.55)]">Aucun rapport d'avancement enregistre.</p>
+                                )}
+                                {deal?.status === 'deal_concluded' ? (
+                                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <p className="text-sm font-semibold text-emerald-800">Deal conclut</p>
+                                      <span className="text-xs text-emerald-700">{formatDateTime(deal.concluded_at)}</span>
+                                    </div>
+                                    <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                                      <div className="rounded-2xl bg-white px-3 py-3"><p className="text-[rgba(15,42,46,0.45)]">Prix final</p><p className="mt-1 font-medium text-[rgb(var(--ink))]">{formatFcfa(deal.sale_price, 'Non renseigne')}</p></div>
+                                      <div className="rounded-2xl bg-white px-3 py-3"><p className="text-[rgba(15,42,46,0.45)]">Statut</p><p className="mt-1 font-medium text-[rgb(var(--ink))]">Offre conclue</p></div>
+                                      <div className="rounded-2xl bg-white px-3 py-3"><p className="text-[rgba(15,42,46,0.45)]">Rapport final</p><p className="mt-1 font-medium text-[rgb(var(--ink))]">{deal.final_report || 'Non renseigne'}</p></div>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <p className="text-sm text-[rgba(15,42,46,0.55)]">Dossier archive sans conclusion finale.</p>
+                                )}
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    ))}
+                  </div>
+                )
+              )}
+
+              {!isPropertyAssignedView && !isClientAssignedView && !isClientHistoryView && activeTab === 'clients' && (
                 loading ? renderEmpty('Chargement...') : clientRequests.length === 0 ? (
                   renderEmpty('Aucune demande client assignee.')
                 ) : (
@@ -899,7 +1022,7 @@ const AgentAssignments = () => {
                                 <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                                   <div className="rounded-2xl bg-white px-3 py-3">
                                     <p className="text-[rgba(15,42,46,0.45)]">Prix final</p>
-                                    <p className="mt-1 font-medium text-[rgb(var(--ink))]">{deal.sale_price || 'Non renseigne'}</p>
+                                    <p className="mt-1 font-medium text-[rgb(var(--ink))]">{formatFcfa(deal.sale_price, 'Non renseigne')}</p>
                                   </div>
                                   <div className="rounded-2xl bg-white px-3 py-3">
                                     <p className="text-[rgba(15,42,46,0.45)]">Statut</p>
@@ -993,7 +1116,7 @@ const AgentAssignments = () => {
                           {renderStatusPill(item.status || 'assigned')}
                         </div>
                         <div className="text-xs text-[rgba(15,42,46,0.5)]">
-                          Budget: {item.budget_min ? Number(item.budget_min).toLocaleString() : 'N/A'} - {item.budget_max ? Number(item.budget_max).toLocaleString() : 'N/A'}
+                          Budget: {formatFcfaRange(item.budget_min, item.budget_max)}
                         </div>
                         <div className="text-xs text-[rgba(15,42,46,0.5)]">Decision: {decisionLabel(item.status)}</div>
                         

@@ -77,7 +77,7 @@ const AdminInvestmentManagement = () => {
   ];
   const defaultImage =
     'https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=800&q=80';
-  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+  const apiBase = import.meta.env.VITE_API_URL || 'https://api.africabuildinvest.com';
   const storageBase = apiBase.replace(/\/api\/?$/, '');
   const getStorageUrl = (path) => {
     if (!path) return '';

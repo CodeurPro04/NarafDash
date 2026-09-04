@@ -20,7 +20,8 @@ import {
   Handshake,
   HardHat,
   ChevronDown,
-  Plus
+  Plus,
+  Package
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -50,6 +51,7 @@ const Sidebar = () => {
       label: 'Clients',
       icon: Users,
       children: [
+        { path: '/admin/clients', search: 'view=pending', icon: Users, label: 'Demandes clients' },
         { path: '/admin/clients', search: 'view=history', icon: FileText, label: 'Historique' },
       ],
     },
@@ -87,6 +89,7 @@ const Sidebar = () => {
       label: 'Clients',
       icon: Users,
       children: [
+        { path: '/manager/clients', search: 'view=pending', icon: Users, label: 'Demandes clients' },
         { path: '/manager/clients', search: 'view=history', icon: FileText, label: 'Historique' },
       ],
     },
@@ -126,6 +129,7 @@ const Sidebar = () => {
       { section: 'Relations' },
       { path: '/admin/messages', icon: MessageSquare, label: 'Messages' },
       { path: '/admin/partnerships', icon: Handshake, label: 'Partenariats' },
+      { path: '/admin/partner-products', icon: Package, label: 'Produits partenaires' },
       { section: 'Parametres' },
       { path: '/admin/reports', icon: BarChart3, label: 'Rapports' },
       { path: '/admin/house-models', icon: Building, label: 'Modeles maison' },
@@ -162,6 +166,7 @@ const Sidebar = () => {
         icon: Users,
         children: [
           { path: '/agent/assigned', search: 'view=clients', icon: Users, label: 'Clients assignes' },
+          { path: '/agent/assigned', search: 'view=history', icon: FileText, label: 'Historique clients assignes' },
         ],
       };
       const agentSearchGroup = {
@@ -248,8 +253,10 @@ const Sidebar = () => {
       <div className="p-6 border-b border-[rgba(255,253,250,0.08)]">
         <div className="space-y-4">
           <div>
-            <img src="/images/logonaraf.png" alt="NARAF Immobilier" className="h-7 w-auto object-contain" />
-            <p className="text-xs text-[rgba(255,253,250,0.6)]">Espace de gestion</p>
+            <div className="inline-flex rounded-xl bg-white px-3 py-2 shadow-sm">
+              <img src="/images/logoabi2.png" alt="NARAF Immobilier" className="h-7 w-auto object-contain" />
+            </div>
+            <p className="mt-2 text-xs text-[rgba(255,253,250,0.6)]">Espace de gestion</p>
           </div>
         </div>
       </div>

@@ -13,6 +13,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { UserCheck, FileText, CheckCircle, XCircle, Mail, Phone, Clock3, Handshake, ScrollText, Search } from 'lucide-react';
 import { resolveMediaUrl } from '../../utils/media';
 import SecureImage from '../common/SecureImage';
+import { formatFcfa } from '../../utils/currency';
 
 const ClientRequests = () => {
   const { user } = useAuth();
@@ -22,6 +23,7 @@ const ClientRequests = () => {
   const [agents, setAgents] = useState([]);
   const [assignments, setAssignments] = useState({});
   const [loading, setLoading] = useState(true);
+  const [requestSearchTerm, setRequestSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState('tous');
   const [rejectModal, setRejectModal] = useState({ open: false, item: null, reason: '' });
   const [historyModal, setHistoryModal] = useState({ open: false, item: null });
@@ -29,7 +31,7 @@ const ClientRequests = () => {
   const [constructionDetails, setConstructionDetails] = useState({});
   const [investmentDetails, setInvestmentDetails] = useState({});
   const [historySearchTerm, setHistorySearchTerm] = useState('');
-  const currentView = new URLSearchParams(location.search).get('view') || 'history';
+  const currentView = new URLSearchParams(location.search).get('view') || 'pending';
   const isHistoryView = currentView === 'history';
 
   const service = useMemo(() => (
@@ -42,14 +44,17 @@ const ClientRequests = () => {
   const typeLabel = (type) => (
     type === 'construction' ? 'Construction'
       : type === 'investissement' ? 'Investissement'
-        : 'Immobilier'
+        : type === 'recherche' ? 'Recherche'
+          : 'Immobilier'
   );
   const typeBadgeClass = (type) => (
     type === 'construction'
       ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
       : type === 'investissement'
         ? 'bg-indigo-100 text-indigo-800 border-indigo-200'
-        : 'bg-sky-100 text-sky-800 border-sky-200'
+        : type === 'recherche'
+          ? 'bg-amber-100 text-amber-800 border-amber-200'
+          : 'bg-sky-100 text-sky-800 border-sky-200'
   );
   const requiredAgentType = (type) => (
     type === 'construction' ? 'constructeur'
@@ -62,6 +67,8 @@ const ClientRequests = () => {
     || item.constructionProject?.title
     || item.investment_project?.title
     || item.investmentProject?.title
+    || item.propertyType?.name
+    || item.property_type?.name
     || null
   );
   const getMediaCandidate = (media) => media?.url || media?.file_path || media?.public_url || media?.secure_url || '';
@@ -80,6 +87,30 @@ const ClientRequests = () => {
       || ''
     );
   };
+  const normalizeSearchRequest = (item) => {
+    const locations = Array.isArray(item?.location_preferences) ? item.location_preferences.filter(Boolean).join(', ') : '';
+    const requirements = [
+      item?.transaction_type ? `Transaction: ${item.transaction_type}` : '',
+      locations ? `Zones: ${locations}` : '',
+      item?.bedrooms_min ? `Chambres min: ${item.bedrooms_min}` : '',
+      item?.surface_min ? `Surface min: ${item.surface_min}` : '',
+      item?.budget_min ? `Budget min: ${item.budget_min}` : '',
+      item?.budget_max ? `Budget max: ${item.budget_max}` : '',
+      item?.additional_requirements || '',
+    ].filter(Boolean).join(' | ');
+
+    return {
+      ...item,
+      entry_kind: 'search_request',
+      request_type: 'recherche',
+      name: item?.user ? `${item.user.first_name || ''} ${item.user.last_name || ''}`.trim() : (item?.name || 'Client'),
+      email: item?.user?.email || item?.email || '',
+      phone: item?.user?.phone || item?.phone || '',
+      message: requirements || 'Demande de recherche immobiliere',
+      propertyType: item?.propertyType || item?.property_type || null,
+    };
+  };
+
   const getTargetPreview = (item) => {
     const propertyUuid = item.property?.uuid || item.property_uuid || item.property?.id;
     const resolvedProperty = propertyDetails[propertyUuid] || item.property;
@@ -113,6 +144,14 @@ const ClientRequests = () => {
       };
     }
 
+    if (item.entry_kind === 'search_request') {
+      return {
+        label: item.propertyType?.name || 'Recherche immobiliere',
+        image: '',
+        type: 'search',
+      };
+    }
+
     return {
       label: 'Sans cible',
       image: '',
@@ -128,6 +167,7 @@ const ClientRequests = () => {
     if (status === 'agent_approved' || status === 'approved') return 'Acceptee';
     if (status === 'agent_rejected' || status === 'rejected') return 'Refusee';
     if (status === 'assigned') return 'Assignee';
+    if (status === 'fulfilled') return 'Traitee';
     if (status === 'pending') return 'En attente';
     return status || 'Non renseigne';
   };
@@ -166,20 +206,26 @@ const ClientRequests = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [agentsRes, pendingRes, historyRes] = await Promise.all([
+      const [agentsRes, pendingRes, historyRes, pendingSearchRes, historySearchRes] = await Promise.all([
         service.getAvailableAgents(),
         service.getPendingClientRequests(),
         service.getClientRequestHistory(),
+        service.getPendingSearchRequests(),
+        service.getSearchRequestHistory(),
       ]);
       const agentsList = extractPayload(agentsRes);
       const pendingPayload = extractPayload(pendingRes);
       const historyPayload = extractPayload(historyRes);
+      const pendingSearchPayload = extractPayload(pendingSearchRes);
+      const historySearchPayload = extractPayload(historySearchRes);
 
       setAgents(Array.isArray(agentsList) ? agentsList : []);
       const pendingList = Array.isArray(pendingPayload.data || pendingPayload) ? (pendingPayload.data || pendingPayload) : [];
       const historyList = Array.isArray(historyPayload.data || historyPayload) ? (historyPayload.data || historyPayload) : [];
-      setRequests(pendingList);
-      setHistory(historyList);
+      const pendingSearchList = (Array.isArray(pendingSearchPayload.data || pendingSearchPayload) ? (pendingSearchPayload.data || pendingSearchPayload) : []).map(normalizeSearchRequest);
+      const historySearchList = (Array.isArray(historySearchPayload.data || historySearchPayload) ? (historySearchPayload.data || historySearchPayload) : []).map(normalizeSearchRequest);
+      setRequests([...pendingList, ...pendingSearchList]);
+      setHistory([...historyList, ...historySearchList]);
 
       const propertyUuids = [...pendingList, ...historyList]
         .map((item) => item.property?.uuid || item.property_uuid || item.property?.id)
@@ -274,10 +320,15 @@ const ClientRequests = () => {
 
   const handleDecision = async (uuid, decision) => {
     try {
+      const target = requests.find((item) => item.uuid === uuid);
+      const isSearch = target?.entry_kind === 'search_request';
       if (decision === 'approve') {
-        await service.approveClientRequest(uuid);
+        if (isSearch) {
+          await service.approveSearchRequest(uuid);
+        } else {
+          await service.approveClientRequest(uuid);
+        }
       } else {
-        const target = requests.find((item) => item.uuid === uuid);
         setRejectModal({ open: true, item: target || { uuid }, reason: '' });
         return;
       }
@@ -295,7 +346,11 @@ const ClientRequests = () => {
       return;
     }
     try {
-      await service.rejectClientRequest(rejectModal.item.uuid, { rejection_reason: rejectModal.reason.trim() });
+      if (rejectModal.item?.entry_kind === 'search_request') {
+        await service.rejectSearchRequest(rejectModal.item.uuid);
+      } else {
+        await service.rejectClientRequest(rejectModal.item.uuid, { rejection_reason: rejectModal.reason.trim() });
+      }
       await loadData();
       setRejectModal({ open: false, item: null, reason: '' });
     } catch (error) {
@@ -311,7 +366,12 @@ const ClientRequests = () => {
       return;
     }
     try {
-      await service.assignClientRequest(uuid, { agent_id: agentId });
+      const target = requests.find((item) => item.uuid === uuid);
+      if (target?.entry_kind === 'search_request') {
+        await service.assignSearchRequest(uuid, { agent_id: agentId });
+      } else {
+        await service.assignClientRequest(uuid, { agent_id: agentId });
+      }
       await loadData();
     } catch (error) {
       console.error('Erreur assignation client:', error);
@@ -319,10 +379,35 @@ const ClientRequests = () => {
     }
   };
 
-  const matchesFilter = (item) => (
-    activeFilter === 'tous' || (item.request_type || 'immobilier') === activeFilter
-  );
-  const filteredRequests = requests.filter(matchesFilter);
+  const filteredRequests = useMemo(() => {
+    const term = requestSearchTerm.trim().toLowerCase();
+
+    return requests.filter((item) => {
+      const typeMatches = activeFilter === 'tous' || (item.request_type || 'immobilier') === activeFilter;
+      if (!typeMatches) return false;
+      if (!term) return true;
+
+      const tracking = trackingFor(item);
+      const target = getTargetPreview(item);
+      const haystack = [
+        item.name,
+        item.email,
+        item.phone,
+        item.message,
+        item.request_type,
+        target.label,
+        item.propertyType?.name,
+        item.property_type?.name,
+        item.agent ? `${item.agent.first_name || ''} ${item.agent.last_name || ''}` : '',
+        statusLabel(item.status, tracking),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return haystack.includes(term);
+    });
+  }, [requests, requestSearchTerm, activeFilter]);
   const historyFeed = useMemo(() => {
     const merged = [...history, ...requests].reduce((acc, item) => {
       if (!item?.uuid) return acc;
@@ -338,7 +423,6 @@ const ClientRequests = () => {
     }, []);
 
     return merged
-      .filter(matchesFilter)
       .sort((a, b) => {
         const aTracking = trackingFor(a);
         const bTracking = trackingFor(b);
@@ -346,7 +430,7 @@ const ClientRequests = () => {
         const bDate = bTracking.deal?.concluded_at || b.updated_at || b.created_at || '';
         return new Date(bDate).getTime() - new Date(aDate).getTime();
       });
-  }, [history, requests, activeFilter]);
+  }, [history, requests]);
   const filteredHistoryFeed = useMemo(() => {
     const term = historySearchTerm.trim().toLowerCase();
     if (!term) return historyFeed;
@@ -404,26 +488,40 @@ const ClientRequests = () => {
                 <FileText className="h-5 w-5" />
                 <h2 className="text-lg font-semibold">Demandes en attente</h2>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { key: 'tous', label: 'Tous' },
-                  { key: 'immobilier', label: 'Immobilier' },
-                  { key: 'construction', label: 'Construction' },
-                  { key: 'investissement', label: 'Investissement' },
-                ].map((filter) => (
-                  <button
-                    key={filter.key}
-                    type="button"
-                    onClick={() => setActiveFilter(filter.key)}
-                    className={`px-4 py-2 rounded-xl text-sm border transition ${
-                      activeFilter === filter.key
-                        ? 'bg-[rgb(var(--ink))] text-white border-[rgb(var(--ink))]'
-                        : 'bg-white/70 text-[rgb(var(--ink))] border-[rgb(var(--line))] hover:border-[rgb(var(--ink))]'
-                    }`}
-                  >
-                    {filter.label}
-                  </button>
-                ))}
+              <div className="space-y-3 rounded-[24px] border border-[rgba(15,42,46,0.08)] bg-white/75 px-4 py-4">
+                <label className="text-xs uppercase tracking-[0.18em] text-[rgba(15,42,46,0.45)]">Recherche</label>
+                <div className="flex items-center gap-3 rounded-2xl border border-[rgb(var(--line))] bg-white px-4 py-3">
+                  <Search className="h-4 w-4 text-[rgba(15,42,46,0.45)]" />
+                  <input
+                    type="text"
+                    value={requestSearchTerm}
+                    onChange={(e) => setRequestSearchTerm(e.target.value)}
+                    placeholder="Rechercher un client, un email, une cible ou un type de demande..."
+                    className="w-full bg-transparent text-sm outline-none"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { key: 'tous', label: 'Tous' },
+                    { key: 'immobilier', label: 'Immobilier' },
+                    { key: 'construction', label: 'Construction' },
+                    { key: 'investissement', label: 'Investissement' },
+                    { key: 'recherche', label: 'Recherche' },
+                  ].map((filter) => (
+                    <button
+                      key={filter.key}
+                      type="button"
+                      onClick={() => setActiveFilter(filter.key)}
+                      className={`px-4 py-2 rounded-xl text-sm border transition ${
+                        activeFilter === filter.key
+                          ? 'bg-[rgb(var(--ink))] text-white border-[rgb(var(--ink))]'
+                          : 'bg-white/70 text-[rgb(var(--ink))] border-[rgb(var(--line))] hover:border-[rgb(var(--ink))]'
+                      }`}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
               </div>
               {loading ? (
                 <p className="text-sm text-[rgba(15,42,46,0.5)]">Chargement...</p>
@@ -543,7 +641,7 @@ const ClientRequests = () => {
                             </div>
                           ) : (
                             <div className="rounded-2xl bg-[rgba(245,248,248,0.92)] px-4 py-3 text-xs text-[rgba(15,42,46,0.65)]">
-                              Cette demande a deja ete traitee. Vous pouvez maintenant proceder a l'assignation si elle est acceptee.
+                              Cette demande a deja ete traitee. Si elle a ete acceptee ou refusee par un agent, vous pouvez proceder a une nouvelle assignation.
                             </div>
                           )}
                         </div>
@@ -572,8 +670,8 @@ const ClientRequests = () => {
                           </select>
                           <button
                             onClick={() => handleAssign(item.uuid)}
-                            className={`btn-primary w-full justify-center ${item.status === 'approved' ? '' : 'opacity-60 cursor-not-allowed'}`}
-                            disabled={item.status !== 'approved'}
+                            className={`btn-primary w-full justify-center ${['approved', 'agent_rejected'].includes(item.status) ? '' : 'opacity-60 cursor-not-allowed'}`}
+                            disabled={!['approved', 'agent_rejected'].includes(item.status)}
                           >
                             <UserCheck className="h-4 w-4" />
                             Assigner cette demande
@@ -622,6 +720,8 @@ const ClientRequests = () => {
                     const tracking = trackingFor(item);
                     const events = tracking.events || [];
                     const target = getTargetPreview(item);
+                    const isRejected = ['rejected', 'agent_rejected'].includes(item.status);
+                    const isConcluded = tracking.deal?.status === 'deal_concluded';
 
                     return (
                       <div key={item.uuid} className="surface-soft px-5 py-5 space-y-4">
@@ -710,15 +810,17 @@ const ClientRequests = () => {
                               {events.length > 0 ? `${events.length} rapport${events.length > 1 ? 's' : ''}` : 'Aucun rapport'}
                             </p>
                           </div>
-                          <div className="rounded-2xl bg-[rgba(245,248,248,0.9)] px-4 py-4">
-                            <div className="inline-flex items-center gap-2 text-[rgba(15,42,46,0.55)]">
+                          <div className={`rounded-2xl px-4 py-4 ${isRejected ? 'border border-rose-200 bg-rose-50' : isConcluded ? 'border border-emerald-200 bg-emerald-50' : 'bg-[rgba(245,248,248,0.9)]'}`}>
+                            <div className={`inline-flex items-center gap-2 ${isRejected ? 'text-rose-700' : isConcluded ? 'text-emerald-700' : 'text-[rgba(15,42,46,0.55)]'}`}>
                               <Handshake className="h-3.5 w-3.5" />
                               Conclusion
                             </div>
-                            <p className="mt-2 font-medium text-[rgb(var(--ink))]">
-                              {tracking.deal?.status === 'deal_concluded'
-                                ? `Conclu ${tracking.deal.sale_price ? `a ${tracking.deal.sale_price}` : ''}`.trim()
-                                : 'Dossier en cours'}
+                            <p className={`mt-2 font-medium ${isRejected ? 'text-rose-700' : isConcluded ? 'text-emerald-700' : 'text-[rgb(var(--ink))]'}`}>
+                              {isRejected
+                                ? 'Refusee'
+                                : isConcluded
+                                  ? `Conclu ${tracking.deal.sale_price ? `a ${formatFcfa(tracking.deal.sale_price)}` : ''}`.trim()
+                                  : 'Dossier en cours'}
                             </p>
                           </div>
                         </div>
@@ -767,7 +869,7 @@ const ClientRequests = () => {
                                         </div>
                                         <div className="rounded-2xl bg-[rgba(245,248,248,0.9)] px-3 py-3">
                                           <p className="text-[rgba(15,42,46,0.45)]">Prix final</p>
-                                          <p className="mt-1 font-medium text-[rgb(var(--ink))]">{event.meta?.sale_price || tracking.deal?.sale_price || 'Non renseigne'}</p>
+                                          <p className="mt-1 font-medium text-[rgb(var(--ink))]">{event.meta?.sale_price ? formatFcfa(event.meta.sale_price) : tracking.deal?.sale_price ? formatFcfa(tracking.deal.sale_price) : 'Non renseigne'}</p>
                                         </div>
                                       </div>
                                     )}
@@ -797,7 +899,7 @@ const ClientRequests = () => {
                               <div className="rounded-2xl bg-white px-4 py-4">
                                 <p className="text-[rgba(15,42,46,0.45)]">Prix final</p>
                                 <p className="mt-2 font-medium text-[rgb(var(--ink))]">
-                                  {tracking.deal.sale_price || 'Non renseigne'}
+                                  {formatFcfa(tracking.deal.sale_price, 'Non renseigne')}
                                 </p>
                               </div>
                               <div className="rounded-2xl bg-white px-4 py-4">
@@ -817,13 +919,10 @@ const ClientRequests = () => {
                         )}
 
                         {item.rejection_reason && ['rejected', 'agent_rejected'].includes(item.status) && (
-                          <button
-                            type="button"
-                            className="btn-ghost text-[rgb(var(--clay))]"
-                            onClick={() => setHistoryModal({ open: true, item })}
-                          >
-                            Voir le motif
-                          </button>
+                          <div className="rounded-[26px] border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-700">
+                            <p className="font-semibold">Motif du refus</p>
+                            <p className="mt-2 whitespace-pre-wrap">{item.rejection_reason}</p>
+                          </div>
                         )}
                       </div>
                     );
