@@ -2,15 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
-import {
-  adminService,
-  managerService,
-  publicPropertyService,
-  publicConstructionService,
-  publicInvestmentService,
-} from '../../services/api';
+import { adminService, managerService } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
-import { UserCheck, FileText, CheckCircle, XCircle, Mail, Phone, Clock3, Handshake, ScrollText, Search } from 'lucide-react';
+import { UserCheck, FileText, CheckCircle, XCircle, Mail, Phone, Clock3, Handshake, ScrollText, Search, Clock, Users, X, ChevronLeft, ChevronRight } from 'lucide-react';
+
+const PAGE_SIZE = 8;
 import { resolveMediaUrl } from '../../utils/media';
 import SecureImage from '../common/SecureImage';
 import { formatFcfa } from '../../utils/currency';
@@ -25,12 +21,13 @@ const ClientRequests = () => {
   const [loading, setLoading] = useState(true);
   const [requestSearchTerm, setRequestSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState('tous');
+  const [activeAgentFilter, setActiveAgentFilter] = useState('tous');
   const [rejectModal, setRejectModal] = useState({ open: false, item: null, reason: '' });
   const [historyModal, setHistoryModal] = useState({ open: false, item: null });
-  const [propertyDetails, setPropertyDetails] = useState({});
-  const [constructionDetails, setConstructionDetails] = useState({});
-  const [investmentDetails, setInvestmentDetails] = useState({});
   const [historySearchTerm, setHistorySearchTerm] = useState('');
+  const [historyTypeFilter, setHistoryTypeFilter] = useState('tous');
+  const [page, setPage] = useState(1);
+  const [historyPage, setHistoryPage] = useState(1);
   const currentView = new URLSearchParams(location.search).get('view') || 'pending';
   const isHistoryView = currentView === 'history';
 
@@ -112,34 +109,32 @@ const ClientRequests = () => {
   };
 
   const getTargetPreview = (item) => {
-    const propertyUuid = item.property?.uuid || item.property_uuid || item.property?.id;
-    const resolvedProperty = propertyDetails[propertyUuid] || item.property;
-    if (resolvedProperty) {
+    // La cible (propriete/projet) est deja incluse par le backend (eager
+    // loading) dans la reponse des demandes clients : inutile de refaire un
+    // appel reseau par demande, qui echouait meme silencieusement pour les
+    // biens non-approuves (l'API publique ne renvoie que les biens approuves).
+    if (item.property) {
       return {
-        label: resolvedProperty.title || 'Propriete',
-        image: getPropertyImage(resolvedProperty),
+        label: item.property.title || 'Propriete',
+        image: getPropertyImage(item.property),
         type: 'property',
       };
     }
 
     const construction = item.construction_project || item.constructionProject;
-    const constructionUuid = construction?.uuid || item.construction_project_uuid || item.construction_uuid || construction?.id;
-    const resolvedConstruction = constructionDetails[constructionUuid] || construction;
     if (construction) {
       return {
-        label: resolvedConstruction?.title || 'Projet de construction',
-        image: getCollectionImage(resolvedConstruction),
+        label: construction.title || 'Projet de construction',
+        image: getCollectionImage(construction),
         type: 'construction',
       };
     }
 
     const investment = item.investment_project || item.investmentProject;
-    const investmentUuid = investment?.uuid || item.investment_project_uuid || item.investment_uuid || investment?.id;
-    const resolvedInvestment = investmentDetails[investmentUuid] || investment;
     if (investment) {
       return {
-        label: resolvedInvestment?.title || 'Projet d investissement',
-        image: getCollectionImage(resolvedInvestment),
+        label: investment.title || 'Projet d investissement',
+        image: getCollectionImage(investment),
         type: 'investment',
       };
     }
@@ -203,15 +198,23 @@ const ClientRequests = () => {
     loadData();
   }, []);
 
+  useEffect(() => {
+    setPage(1);
+  }, [requestSearchTerm, activeFilter, activeAgentFilter]);
+
+  useEffect(() => {
+    setHistoryPage(1);
+  }, [historySearchTerm, historyTypeFilter]);
+
   const loadData = async () => {
     try {
       setLoading(true);
       const [agentsRes, pendingRes, historyRes, pendingSearchRes, historySearchRes] = await Promise.all([
         service.getAvailableAgents(),
-        service.getPendingClientRequests(),
-        service.getClientRequestHistory(),
-        service.getPendingSearchRequests(),
-        service.getSearchRequestHistory(),
+        service.getPendingClientRequests({ per_page: 100 }),
+        service.getClientRequestHistory({ per_page: 100 }),
+        service.getPendingSearchRequests({ per_page: 100 }),
+        service.getSearchRequestHistory({ per_page: 100 }),
       ]);
       const agentsList = extractPayload(agentsRes);
       const pendingPayload = extractPayload(pendingRes);
@@ -226,91 +229,6 @@ const ClientRequests = () => {
       const historySearchList = (Array.isArray(historySearchPayload.data || historySearchPayload) ? (historySearchPayload.data || historySearchPayload) : []).map(normalizeSearchRequest);
       setRequests([...pendingList, ...pendingSearchList]);
       setHistory([...historyList, ...historySearchList]);
-
-      const propertyUuids = [...pendingList, ...historyList]
-        .map((item) => item.property?.uuid || item.property_uuid || item.property?.id)
-        .filter(Boolean)
-        .filter((uuid, index, array) => array.indexOf(uuid) === index);
-      const constructionUuids = [...pendingList, ...historyList]
-        .map((item) => (
-          item.construction_project?.uuid
-          || item.constructionProject?.uuid
-          || item.construction_project_uuid
-          || item.construction_uuid
-          || item.construction_project?.id
-          || item.constructionProject?.id
-        ))
-        .filter(Boolean)
-        .filter((uuid, index, array) => array.indexOf(uuid) === index);
-      const investmentUuids = [...pendingList, ...historyList]
-        .map((item) => (
-          item.investment_project?.uuid
-          || item.investmentProject?.uuid
-          || item.investment_project_uuid
-          || item.investment_uuid
-          || item.investment_project?.id
-          || item.investmentProject?.id
-        ))
-        .filter(Boolean)
-        .filter((uuid, index, array) => array.indexOf(uuid) === index);
-
-      if (propertyUuids.length > 0) {
-        const propertyResults = await Promise.allSettled(
-          propertyUuids.map((uuid) => publicPropertyService.getById(uuid))
-        );
-
-        const nextDetails = propertyResults.reduce((acc, result, index) => {
-          if (result.status !== 'fulfilled') return acc;
-          const payload = extractPayload(result.value);
-          const property = payload?.data || payload;
-          if (property && typeof property === 'object') {
-            acc[propertyUuids[index]] = property;
-          }
-          return acc;
-        }, {});
-
-        setPropertyDetails(nextDetails);
-      } else {
-        setPropertyDetails({});
-      }
-
-      if (constructionUuids.length > 0) {
-        const constructionResponse = await publicConstructionService.getAll();
-        const constructionPayload = extractPayload(constructionResponse);
-        const constructionList = Array.isArray(constructionPayload?.data || constructionPayload)
-          ? (constructionPayload?.data || constructionPayload)
-          : [];
-        const nextConstructionDetails = constructionList.reduce((acc, project) => {
-          const uuid = project?.uuid || project?.id;
-          if (uuid && constructionUuids.includes(uuid)) {
-            acc[uuid] = project;
-          }
-          return acc;
-        }, {});
-        setConstructionDetails(nextConstructionDetails);
-      } else {
-        setConstructionDetails({});
-      }
-
-      if (investmentUuids.length > 0) {
-        const investmentResults = await Promise.allSettled(
-          investmentUuids.map((uuid) => publicInvestmentService.getById(uuid))
-        );
-
-        const nextInvestmentDetails = investmentResults.reduce((acc, result, index) => {
-          if (result.status !== 'fulfilled') return acc;
-          const payload = extractPayload(result.value);
-          const project = payload?.data || payload;
-          if (project && typeof project === 'object') {
-            acc[investmentUuids[index]] = project;
-          }
-          return acc;
-        }, {});
-
-        setInvestmentDetails(nextInvestmentDetails);
-      } else {
-        setInvestmentDetails({});
-      }
     } catch (error) {
       console.error('Erreur chargement demandes clients:', error);
     } finally {
@@ -347,7 +265,7 @@ const ClientRequests = () => {
     }
     try {
       if (rejectModal.item?.entry_kind === 'search_request') {
-        await service.rejectSearchRequest(rejectModal.item.uuid);
+        await service.rejectSearchRequest(rejectModal.item.uuid, { rejection_reason: rejectModal.reason.trim() });
       } else {
         await service.rejectClientRequest(rejectModal.item.uuid, { rejection_reason: rejectModal.reason.trim() });
       }
@@ -385,6 +303,9 @@ const ClientRequests = () => {
     return requests.filter((item) => {
       const typeMatches = activeFilter === 'tous' || (item.request_type || 'immobilier') === activeFilter;
       if (!typeMatches) return false;
+      const agentMatches = activeAgentFilter === 'tous'
+        || (activeAgentFilter === 'assigne' ? Boolean(item.agent) : !item.agent);
+      if (!agentMatches) return false;
       if (!term) return true;
 
       const tracking = trackingFor(item);
@@ -407,7 +328,20 @@ const ClientRequests = () => {
 
       return haystack.includes(term);
     });
-  }, [requests, requestSearchTerm, activeFilter]);
+  }, [requests, requestSearchTerm, activeFilter, activeAgentFilter]);
+  const pendingUnassignedCount = useMemo(
+    () => requests.filter((item) => !item.agent).length,
+    [requests]
+  );
+  const pendingApprovedCount = useMemo(
+    () => requests.filter((item) => ['approved', 'agent_rejected'].includes(item.status)).length,
+    [requests]
+  );
+  const pendingLastPage = Math.max(1, Math.ceil(filteredRequests.length / PAGE_SIZE));
+  const paginatedRequests = useMemo(
+    () => filteredRequests.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filteredRequests, page]
+  );
   const historyFeed = useMemo(() => {
     const merged = [...history, ...requests].reduce((acc, item) => {
       if (!item?.uuid) return acc;
@@ -431,11 +365,28 @@ const ClientRequests = () => {
         return new Date(bDate).getTime() - new Date(aDate).getTime();
       });
   }, [history, requests]);
+  const historyStats = useMemo(() => {
+    let concluded = 0;
+    let rejected = 0;
+    historyFeed.forEach((item) => {
+      const tracking = trackingFor(item);
+      if (tracking.deal?.status === 'deal_concluded') concluded += 1;
+      else if (['rejected', 'agent_rejected'].includes(item.status)) rejected += 1;
+    });
+    return {
+      total: historyFeed.length,
+      concluded,
+      rejected,
+      ongoing: historyFeed.length - concluded - rejected,
+    };
+  }, [historyFeed]);
   const filteredHistoryFeed = useMemo(() => {
     const term = historySearchTerm.trim().toLowerCase();
-    if (!term) return historyFeed;
 
     return historyFeed.filter((item) => {
+      const typeMatches = historyTypeFilter === 'tous' || (item.request_type || 'immobilier') === historyTypeFilter;
+      if (!typeMatches) return false;
+      if (!term) return true;
       const tracking = trackingFor(item);
       const events = tracking.events || [];
       const searchBase = [
@@ -463,73 +414,124 @@ const ClientRequests = () => {
 
       return searchBase.includes(term);
     });
-  }, [historyFeed, historySearchTerm]);
+  }, [historyFeed, historySearchTerm, historyTypeFilter]);
+  const historyLastPage = Math.max(1, Math.ceil(filteredHistoryFeed.length / PAGE_SIZE));
+  const paginatedHistoryFeed = useMemo(
+    () => filteredHistoryFeed.slice((historyPage - 1) * PAGE_SIZE, historyPage * PAGE_SIZE),
+    [filteredHistoryFeed, historyPage]
+  );
 
   return (
     <div className="app-shell flex">
       <Sidebar />
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         <Header />
-        <main className="flex-1 px-6 py-8">
+        <main className="flex-1 px-4 sm:px-6 py-6 sm:py-8">
           <div className="max-w-7xl mx-auto space-y-6">
             <div>
               <p className="chip">{roleLabel}</p>
-              <h1 className="text-3xl font-semibold mt-3">Clients</h1>
+              <h1 className="text-2xl sm:text-3xl font-semibold mt-3 text-[rgb(var(--ink))]">Demandes clients</h1>
               <p className="text-sm text-[rgba(15,42,46,0.6)] mt-2">
                 {isHistoryView
                   ? 'Consultez l historique client, les rapports agents et les offres conclues.'
-                  : 'Traitez les demandes clients, acceptez/refusez puis assignez.'}
+                  : 'Traitez les demandes clients, acceptez/refusez puis assignez un agent.'}
               </p>
             </div>
 
             {!isHistoryView && (
-              <div className="surface-panel p-6 space-y-4">
-              <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                <h2 className="text-lg font-semibold">Demandes en attente</h2>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                {[
+                  { key: 'pending', label: 'En attente', value: requests.length, icon: Clock, highlight: requests.length > 0 },
+                  { key: 'unassigned', label: 'Non assignees', value: pendingUnassignedCount, icon: UserCheck, highlight: pendingUnassignedCount > 0 },
+                  { key: 'approved', label: 'Pretes a assigner', value: pendingApprovedCount, icon: CheckCircle },
+                  { key: 'agents', label: 'Agents disponibles', value: agents.length, icon: Users },
+                ].map((kpi) => (
+                  <div key={kpi.key} className="surface-card p-4 sm:p-5 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-xs sm:text-sm text-[rgba(15,42,46,0.6)] truncate">{kpi.label}</p>
+                        <p className="text-2xl sm:text-3xl font-semibold mt-1.5 text-[rgb(var(--ink))]">
+                          {loading ? '...' : Number(kpi.value || 0).toLocaleString()}
+                        </p>
+                      </div>
+                      <div
+                        className={`h-9 w-9 sm:h-11 sm:w-11 shrink-0 rounded-2xl flex items-center justify-center ${
+                          kpi.highlight ? 'bg-[rgb(var(--clay))] text-white' : 'bg-[rgba(15,42,46,0.08)] text-[rgb(var(--ink))]'
+                        }`}
+                      >
+                        <kpi.icon className="h-4 w-4 sm:h-5 sm:w-5" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="space-y-3 rounded-[24px] border border-[rgba(15,42,46,0.08)] bg-white/75 px-4 py-4">
-                <label className="text-xs uppercase tracking-[0.18em] text-[rgba(15,42,46,0.45)]">Recherche</label>
-                <div className="flex items-center gap-3 rounded-2xl border border-[rgb(var(--line))] bg-white px-4 py-3">
-                  <Search className="h-4 w-4 text-[rgba(15,42,46,0.45)]" />
+            )}
+
+            {!isHistoryView && (
+              <div className="surface-panel p-4 sm:p-5 flex flex-col md:flex-row gap-3 md:items-center">
+                <div className="relative flex-1 min-w-0">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[rgba(15,42,46,0.5)]" />
                   <input
                     type="text"
                     value={requestSearchTerm}
                     onChange={(e) => setRequestSearchTerm(e.target.value)}
-                    placeholder="Rechercher un client, un email, une cible ou un type de demande..."
-                    className="w-full bg-transparent text-sm outline-none"
+                    placeholder="Rechercher un client, un email, une cible..."
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[rgb(var(--line))] bg-white/70 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
                   />
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { key: 'tous', label: 'Tous' },
-                    { key: 'immobilier', label: 'Immobilier' },
-                    { key: 'construction', label: 'Construction' },
-                    { key: 'investissement', label: 'Investissement' },
-                    { key: 'recherche', label: 'Recherche' },
-                  ].map((filter) => (
-                    <button
-                      key={filter.key}
-                      type="button"
-                      onClick={() => setActiveFilter(filter.key)}
-                      className={`px-4 py-2 rounded-xl text-sm border transition ${
-                        activeFilter === filter.key
-                          ? 'bg-[rgb(var(--ink))] text-white border-[rgb(var(--ink))]'
-                          : 'bg-white/70 text-[rgb(var(--ink))] border-[rgb(var(--line))] hover:border-[rgb(var(--ink))]'
-                      }`}
-                    >
-                      {filter.label}
-                    </button>
-                  ))}
+                <select
+                  value={activeFilter}
+                  onChange={(e) => setActiveFilter(e.target.value)}
+                  className="px-4 py-2.5 rounded-xl border border-[rgb(var(--line))] bg-white/70 text-sm shrink-0"
+                >
+                  <option value="tous">Tous types</option>
+                  <option value="immobilier">Immobilier</option>
+                  <option value="construction">Construction</option>
+                  <option value="investissement">Investissement</option>
+                  <option value="recherche">Recherche</option>
+                </select>
+                <select
+                  value={activeAgentFilter}
+                  onChange={(e) => setActiveAgentFilter(e.target.value)}
+                  className="px-4 py-2.5 rounded-xl border border-[rgb(var(--line))] bg-white/70 text-sm shrink-0"
+                >
+                  <option value="tous">Tous agents</option>
+                  <option value="assigne">Assigne</option>
+                  <option value="non-assigne">Non assigne</option>
+                </select>
+                {(requestSearchTerm || activeFilter !== 'tous' || activeAgentFilter !== 'tous') && (
+                  <button
+                    type="button"
+                    onClick={() => { setRequestSearchTerm(''); setActiveFilter('tous'); setActiveAgentFilter('tous'); }}
+                    className="btn-ghost shrink-0 text-xs"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Reinitialiser
+                  </button>
+                )}
+              </div>
+            )}
+
+            {!isHistoryView && (
+              <div className="surface-panel p-6 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  <h2 className="text-lg font-semibold">Demandes en attente</h2>
                 </div>
+                {filteredRequests.length > 0 && <span className="chip shrink-0">{filteredRequests.length} demande{filteredRequests.length > 1 ? 's' : ''}</span>}
               </div>
               {loading ? (
-                <p className="text-sm text-[rgba(15,42,46,0.5)]">Chargement...</p>
+                <div className="space-y-3">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="h-24 rounded-xl bg-[rgba(15,42,46,0.05)] animate-pulse" />
+                  ))}
+                </div>
               ) : filteredRequests.length === 0 ? (
-                <p className="text-sm text-[rgba(15,42,46,0.5)]">Aucune demande.</p>
+                <p className="text-sm text-[rgba(15,42,46,0.5)]">Aucune demande ne correspond a ces criteres.</p>
               ) : (
                 <div className="space-y-3">
-                  {filteredRequests.map((item) => (
+                  {paginatedRequests.map((item) => (
                     <div key={item.uuid} className="surface-soft px-5 py-5 space-y-5">
                       {(() => {
                         const target = getTargetPreview(item);
@@ -660,7 +662,7 @@ const ClientRequests = () => {
                             {agents
                               .filter((agent) => {
                                 const needed = requiredAgentType(item.request_type);
-                                return !agent.agent_type || agent.agent_type === needed;
+                                return agent.agent_type === needed;
                               })
                               .map((agent) => (
                                 <option key={agent.id} value={agent.id}>
@@ -685,38 +687,116 @@ const ClientRequests = () => {
                   ))}
                 </div>
               )}
+              {!loading && filteredRequests.length > 0 && (
+                <div className="flex items-center justify-between gap-3 pt-2 border-t border-[rgba(15,42,46,0.08)]">
+                  <p className="text-xs text-[rgba(15,42,46,0.55)]">
+                    {filteredRequests.length} demande{filteredRequests.length > 1 ? 's' : ''} - page {page} sur {pendingLastPage}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page <= 1}
+                      className="h-8 w-8 rounded-lg border border-[rgb(var(--line))] flex items-center justify-center text-[rgba(15,42,46,0.6)] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white transition"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => setPage((p) => Math.min(pendingLastPage, p + 1))}
+                      disabled={page >= pendingLastPage}
+                      className="h-8 w-8 rounded-lg border border-[rgb(var(--line))] flex items-center justify-center text-[rgba(15,42,46,0.6)] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white transition"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
             )}
 
             {isHistoryView && (
-              <div className="surface-panel p-6 space-y-4">
-              <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                <h2 className="text-lg font-semibold">Historique</h2>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                {[
+                  { key: 'total', label: 'Dossiers', value: historyStats.total, icon: FileText },
+                  { key: 'concluded', label: 'Deals conclus', value: historyStats.concluded, icon: Handshake },
+                  { key: 'ongoing', label: 'En cours', value: historyStats.ongoing, icon: Clock },
+                  { key: 'rejected', label: 'Refuses', value: historyStats.rejected, icon: XCircle },
+                ].map((kpi) => (
+                  <div key={kpi.key} className="surface-card p-4 sm:p-5 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-xs sm:text-sm text-[rgba(15,42,46,0.6)] truncate">{kpi.label}</p>
+                        <p className="text-2xl sm:text-3xl font-semibold mt-1.5 text-[rgb(var(--ink))]">
+                          {loading ? '...' : Number(kpi.value || 0).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="h-9 w-9 sm:h-11 sm:w-11 shrink-0 rounded-2xl flex items-center justify-center bg-[rgba(15,42,46,0.08)] text-[rgb(var(--ink))]">
+                        <kpi.icon className="h-4 w-4 sm:h-5 sm:w-5" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <p className="text-sm text-[rgba(15,42,46,0.58)]">
-                Retrouvez ici le detail complet des demandes clients, les decisions prises, le suivi de l'agent et la conclusion du deal.
-              </p>
-              <div className="rounded-[24px] border border-[rgba(15,42,46,0.08)] bg-white/75 px-4 py-4">
-                <label className="text-xs uppercase tracking-[0.18em] text-[rgba(15,42,46,0.45)]">Recherche</label>
-                <div className="mt-3 flex items-center gap-3 rounded-2xl border border-[rgb(var(--line))] bg-white px-4 py-3">
-                  <Search className="h-4 w-4 text-[rgba(15,42,46,0.45)]" />
+            )}
+
+            {isHistoryView && (
+              <div className="surface-panel p-4 sm:p-5 flex flex-col md:flex-row gap-3 md:items-center">
+                <div className="relative flex-1 min-w-0">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[rgba(15,42,46,0.5)]" />
                   <input
                     type="text"
                     value={historySearchTerm}
                     onChange={(e) => setHistorySearchTerm(e.target.value)}
                     placeholder="Rechercher un client, un agent, une cible, un rapport..."
-                    className="w-full bg-transparent text-sm outline-none"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[rgb(var(--line))] bg-white/70 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
                   />
                 </div>
+                <select
+                  value={historyTypeFilter}
+                  onChange={(e) => setHistoryTypeFilter(e.target.value)}
+                  className="px-4 py-2.5 rounded-xl border border-[rgb(var(--line))] bg-white/70 text-sm shrink-0"
+                >
+                  <option value="tous">Tous types</option>
+                  <option value="immobilier">Immobilier</option>
+                  <option value="construction">Construction</option>
+                  <option value="investissement">Investissement</option>
+                  <option value="recherche">Recherche</option>
+                </select>
+                {(historySearchTerm || historyTypeFilter !== 'tous') && (
+                  <button
+                    type="button"
+                    onClick={() => { setHistorySearchTerm(''); setHistoryTypeFilter('tous'); }}
+                    className="btn-ghost shrink-0 text-xs"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Reinitialiser
+                  </button>
+                )}
               </div>
+            )}
+
+            {isHistoryView && (
+              <div className="surface-panel p-6 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  <h2 className="text-lg font-semibold">Historique</h2>
+                </div>
+                {filteredHistoryFeed.length > 0 && <span className="chip shrink-0">{filteredHistoryFeed.length} dossier{filteredHistoryFeed.length > 1 ? 's' : ''}</span>}
+              </div>
+              <p className="text-sm text-[rgba(15,42,46,0.58)]">
+                Retrouvez ici le detail complet des demandes clients, les decisions prises, le suivi de l'agent et la conclusion du deal.
+              </p>
               {loading ? (
-                <p className="text-sm text-[rgba(15,42,46,0.5)]">Chargement...</p>
+                <div className="space-y-3">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="h-24 rounded-xl bg-[rgba(15,42,46,0.05)] animate-pulse" />
+                  ))}
+                </div>
               ) : filteredHistoryFeed.length === 0 ? (
-                <p className="text-sm text-[rgba(15,42,46,0.5)]">Aucun historique.</p>
+                <p className="text-sm text-[rgba(15,42,46,0.5)]">Aucun historique ne correspond a ces criteres.</p>
               ) : (
                 <div className="space-y-3">
-                  {filteredHistoryFeed.map((item) => {
+                  {paginatedHistoryFeed.map((item) => {
                     const tracking = trackingFor(item);
                     const events = tracking.events || [];
                     const target = getTargetPreview(item);
@@ -927,6 +1007,29 @@ const ClientRequests = () => {
                       </div>
                     );
                   })}
+                </div>
+              )}
+              {!loading && filteredHistoryFeed.length > 0 && (
+                <div className="flex items-center justify-between gap-3 pt-2 border-t border-[rgba(15,42,46,0.08)]">
+                  <p className="text-xs text-[rgba(15,42,46,0.55)]">
+                    {filteredHistoryFeed.length} dossier{filteredHistoryFeed.length > 1 ? 's' : ''} - page {historyPage} sur {historyLastPage}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                      disabled={historyPage <= 1}
+                      className="h-8 w-8 rounded-lg border border-[rgb(var(--line))] flex items-center justify-center text-[rgba(15,42,46,0.6)] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white transition"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => setHistoryPage((p) => Math.min(historyLastPage, p + 1))}
+                      disabled={historyPage >= historyLastPage}
+                      className="h-8 w-8 rounded-lg border border-[rgb(var(--line))] flex items-center justify-center text-[rgba(15,42,46,0.6)] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white transition"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

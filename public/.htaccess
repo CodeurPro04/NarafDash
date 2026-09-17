@@ -1,0 +1,107 @@
+# ──────────────────────────────────────────────────────────
+# ABI Group — Back-office (React SPA / Vite)
+# Apache config — à placer à la racine du site (public_html)
+# ──────────────────────────────────────────────────────────
+
+# ── Encodage & type MIME par défaut ─────────────────────────
+AddDefaultCharset UTF-8
+
+<IfModule mod_mime.c>
+    AddType application/javascript .js .mjs
+    AddType text/css              .css
+    AddType application/json      .json .webmanifest
+    AddType image/svg+xml         .svg .svgz
+    AddType font/woff             .woff
+    AddType font/woff2            .woff2
+    AddType image/webp            .webp
+</IfModule>
+
+# ── Empêcher l'accès aux fichiers sensibles ─────────────────
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+<FilesMatch "\.(env|log|md|lock|json\.example|gitignore|gitattributes)$">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # ── 1. Forcer HTTPS ──────────────────────────────────────
+    RewriteCond %{HTTPS} off
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+    # ── 2. Fallback SPA : toute route non-fichier renvoie vers index.html ──
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ index.html [L]
+</IfModule>
+
+# ── Fallback si mod_rewrite est absent : 404 -> index.html ──
+ErrorDocument 404 /index.html
+
+# ── Compression Gzip ─────────────────────────────────────────
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript
+    AddOutputFilterByType DEFLATE application/javascript application/x-javascript
+    AddOutputFilterByType DEFLATE application/json application/xml application/rss+xml
+    AddOutputFilterByType DEFLATE image/svg+xml font/woff font/woff2 font/ttf font/otf
+</IfModule>
+
+# ── Cache navigateur ─────────────────────────────────────────
+<IfModule mod_expires.c>
+    ExpiresActive On
+
+    # HTML jamais mis en cache (il référence les assets hashés)
+    ExpiresByType text/html "access plus 0 seconds"
+
+    # Assets versionnés (hash dans le nom de fichier) : cache long
+    ExpiresByType application/javascript "access plus 1 year"
+    ExpiresByType text/css              "access plus 1 year"
+    ExpiresByType image/svg+xml         "access plus 1 year"
+    ExpiresByType image/webp            "access plus 1 year"
+    ExpiresByType image/png             "access plus 1 year"
+    ExpiresByType image/jpg             "access plus 1 year"
+    ExpiresByType image/jpeg            "access plus 1 year"
+    ExpiresByType image/gif             "access plus 1 year"
+    ExpiresByType image/x-icon          "access plus 1 year"
+    ExpiresByType font/woff             "access plus 1 year"
+    ExpiresByType font/woff2            "access plus 1 year"
+
+    # Manifest / JSON : courte durée
+    ExpiresByType application/json      "access plus 1 hour"
+    ExpiresByType application/manifest+json "access plus 1 hour"
+</IfModule>
+
+<IfModule mod_headers.c>
+    # index.html : jamais de cache (fichier d'entrée de la SPA)
+    <FilesMatch "index\.html$">
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+        Header set Pragma "no-cache"
+        Header unset ETag
+    </FilesMatch>
+
+    # Assets buildés par Vite (hash dans le nom) : cache immuable
+    <FilesMatch "\.(js|mjs|css|woff2?|ttf|otf|svg|png|jpe?g|gif|webp|ico)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+
+    # ── En-têtes de sécurité ─────────────────────────────────
+    # Back-office : pas d'affichage en iframe externe, indexation désactivée
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "DENY"
+    Header always set X-XSS-Protection "1; mode=block"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    Header always set X-Robots-Tag "noindex, nofollow"
+
+    # Autoriser le chargement des polices/assets cross-origin (Google Fonts, API)
+    Header set Access-Control-Allow-Origin "*" "expr=%{REQUEST_URI} =~ m#\.(woff2?|ttf|otf|svg)$#"
+</IfModule>
+
+# ── Désactiver le listing des dossiers ───────────────────────
+Options -Indexes
+Options +FollowSymLinks

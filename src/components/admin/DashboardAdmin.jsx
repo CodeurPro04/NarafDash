@@ -3,12 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowUpRight,
   Building,
-  FileText,
   Handshake,
   HardHat,
   Mail,
   MessageSquare,
-  ShieldCheck,
   TrendingUp,
   UserCheck,
   Users,
@@ -23,10 +21,8 @@ const DashboardAdmin = () => {
   const [summary, setSummary] = useState({
     users: 0,
     agents: 0,
-    propertyRequests: 0,
-    constructionRequests: 0,
-    investmentRequests: 0,
     unreadMessages: 0,
+    pendingPartnerships: 0,
   });
   const [domainCards, setDomainCards] = useState([]);
   const [recentMessages, setRecentMessages] = useState([]);
@@ -63,7 +59,6 @@ const DashboardAdmin = () => {
         setLoading(true);
         const [
           dashboardRes,
-          rolesRes,
           usersRes,
           agentsRes,
           propertyPendingRes,
@@ -75,8 +70,9 @@ const DashboardAdmin = () => {
           pendingPartnershipsRes,
         ] = await Promise.all([
           adminService.getDashboard(),
-          adminService.getRoles(),
-          adminService.getUsers(),
+          // per_page=1 : seules les stats globales (repartition par role, etc.)
+          // nous interessent ici, pas la liste elle-meme.
+          adminService.getUsers({ per_page: 1 }),
           adminService.getAvailableAgents(),
           adminService.getPendingPropertyRequests(),
           adminService.getPropertyRequestHistory(),
@@ -88,8 +84,7 @@ const DashboardAdmin = () => {
         ]);
 
         const dashboardData = extractPayload(dashboardRes) || {};
-        const roles = extractList(rolesRes);
-        const users = extractList(usersRes);
+        const userStats = usersRes?.data?.stats || {};
         const agents = extractList(agentsRes);
         const propertyPending = extractList(propertyPendingRes);
         const propertyHistory = extractList(propertyHistoryRes);
@@ -107,33 +102,21 @@ const DashboardAdmin = () => {
         const investmentClientHistory = clientHistory.filter((item) => item.request_type === 'investissement');
         const unreadMessages = messages.filter((message) => !message.is_read).length;
 
-        const roleNameById = new Map(roles.map((role) => [role.id, role.name || role.slug]));
-        const usersPerRole = Array.from(
-          users.reduce((acc, user) => {
-            const roleId = user.role_id || user.role?.id || user.role;
-            const label = roleNameById.get(roleId) || user.role?.name || user.role?.slug || 'Autre';
-            acc.set(label, (acc.get(label) || 0) + 1);
-            return acc;
-          }, new Map())
-        ).map(([label, value]) => ({ label, value }));
-
         setSummary({
-          users: dashboardData.users_count ?? users.length,
+          users: dashboardData.users_count ?? userStats.total ?? 0,
           agents: agents.length,
-          propertyRequests: propertyPending.length + propertyClientPending.length,
-          constructionRequests: constructionClientPending.length,
-          investmentRequests: investmentClientPending.length,
           unreadMessages,
+          pendingPartnerships: pendingPartnerships.length,
         });
 
-        setRoleStats(usersPerRole);
+        setRoleStats(Array.isArray(userStats.by_role) ? userStats.by_role : []);
         setRecentMessages(messages.slice(0, 5));
         setDomainCards([
           {
             key: 'property',
             label: 'Propriete',
             icon: Building,
-            color: 'bg-sky-100 text-sky-700',
+            hue: 'sky',
             pending: propertyPending.length + propertyClientPending.length,
             followUp: countInFollowUp(propertyClientHistory),
             concluded: countConcluded(propertyClientHistory),
@@ -143,7 +126,7 @@ const DashboardAdmin = () => {
             key: 'construction',
             label: 'Construction',
             icon: HardHat,
-            color: 'bg-amber-100 text-amber-700',
+            hue: 'amber',
             pending: constructionClientPending.length,
             followUp: countInFollowUp(constructionClientHistory),
             concluded: countConcluded(constructionClientHistory),
@@ -153,7 +136,7 @@ const DashboardAdmin = () => {
             key: 'investment',
             label: 'Investissement',
             icon: TrendingUp,
-            color: 'bg-emerald-100 text-emerald-700',
+            hue: 'emerald',
             pending: investmentClientPending.length,
             followUp: countInFollowUp(investmentClientHistory),
             concluded: countConcluded(investmentClientHistory),
@@ -205,55 +188,65 @@ const DashboardAdmin = () => {
         title: 'Agents disponibles',
         value: summary.agents,
         icon: UserCheck,
-        note: 'Agents mobilisables pour les assignations',
-      },
-      {
-        title: 'Demandes propriete',
-        value: summary.propertyRequests,
-        icon: Building,
-        note: 'Demandes proprietaires et clients',
-      },
-      {
-        title: 'Demandes construction',
-        value: summary.constructionRequests,
-        icon: HardHat,
-        note: 'Demandes clients construction',
-      },
-      {
-        title: 'Demandes investissement',
-        value: summary.investmentRequests,
-        icon: TrendingUp,
-        note: 'Demandes clients investissement',
+        note: 'Mobilisables pour les assignations',
       },
       {
         title: 'Messages non lus',
         value: summary.unreadMessages,
         icon: MessageSquare,
-        note: 'Messages administratifs a traiter',
+        note: 'A traiter par l equipe',
+        highlight: summary.unreadMessages > 0,
+      },
+      {
+        title: 'Partenariats en attente',
+        value: summary.pendingPartnerships,
+        icon: Handshake,
+        note: 'Candidatures a valider',
+        highlight: summary.pendingPartnerships > 0,
       },
     ],
     [summary]
   );
 
+  // Rampe monotone (claire -> foncee) par domaine, pour les 3 etapes du pipeline
+  // (Attente / Suivi / Conclu) : meme teinte que le domaine, intensite croissante.
+  const domainRamp = {
+    sky: ['bg-sky-50 text-sky-700', 'bg-sky-100 text-sky-800', 'bg-sky-600 text-white'],
+    amber: ['bg-amber-50 text-amber-700', 'bg-amber-100 text-amber-800', 'bg-amber-600 text-white'],
+    emerald: ['bg-emerald-50 text-emerald-700', 'bg-emerald-100 text-emerald-800', 'bg-emerald-600 text-white'],
+  };
+  const domainBadge = {
+    sky: 'bg-sky-100 text-sky-700',
+    amber: 'bg-amber-100 text-amber-700',
+    emerald: 'bg-emerald-100 text-emerald-700',
+  };
+  const domainBar = {
+    sky: 'bg-sky-500',
+    amber: 'bg-amber-500',
+    emerald: 'bg-emerald-500',
+  };
+
+  const maxRoleValue = Math.max(1, ...roleStats.map((item) => item.value));
+
   const quickActions = [
     {
       label: 'Demandes propriete',
-      description: 'Traiter et assigner',
+      icon: Building,
       onClick: () => navigate('/admin/assignments?type=property'),
     },
     {
       label: 'Demandes construction',
-      description: 'Traiter et assigner',
+      icon: HardHat,
       onClick: () => navigate('/admin/assignments?type=construction'),
     },
     {
       label: "Demandes d'investissement",
-      description: 'Traiter et assigner',
+      icon: TrendingUp,
       onClick: () => navigate('/admin/investments?view=requests'),
     },
     {
       label: 'Demandes clients',
-      description: 'Traiter, assigner et suivre',
+      icon: Users,
       onClick: () => navigate('/admin/clients?view=pending'),
     },
   ];
@@ -263,139 +256,186 @@ const DashboardAdmin = () => {
       <Sidebar />
       <div className="flex-1 flex flex-col">
         <Header />
-        <main className="flex-1 px-6 py-8">
-          <div className="max-w-7xl mx-auto space-y-8">
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-              <div className="surface-panel p-6 xl:col-span-2">
-                <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="space-y-3 max-w-2xl">
-                    <p className="chip">Administration centrale</p>
-                    <h1 className="text-3xl font-semibold">Pilotage global du backoffice</h1>
-                    <p className="text-sm text-[rgba(15,42,46,0.6)]">
-                      Supervisez les demandes par domaine, les suivis agents, les dossiers conclus et les points d attention prioritaires.
-                    </p>
-                  </div>
-                  <div className="surface-soft px-4 py-3 flex items-center gap-3">
-                    <span className="h-2.5 w-2.5 rounded-full bg-[rgb(var(--sage))]" />
-                    <span className="text-xs font-medium text-[rgba(15,42,46,0.7)]">
-                      Backoffice operationnel
-                    </span>
-                  </div>
-                </div>
-                <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {domainCards.map((card) => (
-                    <button
-                      key={card.key}
-                      type="button"
-                      onClick={card.action}
-                      className="rounded-[24px] border border-[rgba(15,42,46,0.08)] bg-white/80 px-5 py-5 text-left transition hover:border-[rgba(15,42,46,0.18)]"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className={`inline-flex h-11 w-11 items-center justify-center rounded-2xl ${card.color}`}>
-                          <card.icon className="h-5 w-5" />
-                        </span>
-                        <ArrowUpRight className="h-4 w-4 text-[rgba(15,42,46,0.45)]" />
-                      </div>
-                      <p className="mt-4 text-lg font-semibold text-[rgb(var(--ink))]">{card.label}</p>
-                      <div className="mt-4 grid grid-cols-3 gap-3 text-center">
-                        <div className="rounded-2xl bg-[rgba(245,248,248,0.9)] px-3 py-3">
-                          <p className="text-[11px] uppercase tracking-[0.16em] text-[rgba(15,42,46,0.42)]">En attente</p>
-                          <p className="mt-2 text-lg font-semibold">{loading ? '...' : card.pending}</p>
-                        </div>
-                        <div className="rounded-2xl bg-[rgba(245,248,248,0.9)] px-3 py-3">
-                          <p className="text-[11px] uppercase tracking-[0.16em] text-[rgba(15,42,46,0.42)]">Suivi</p>
-                          <p className="mt-2 text-lg font-semibold">{loading ? '...' : card.followUp}</p>
-                        </div>
-                        <div className="rounded-2xl bg-[rgba(245,248,248,0.9)] px-3 py-3">
-                          <p className="text-[11px] uppercase tracking-[0.16em] text-[rgba(15,42,46,0.42)]">Conclu</p>
-                          <p className="mt-2 text-lg font-semibold">{loading ? '...' : card.concluded}</p>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+        <main className="flex-1 px-4 sm:px-6 py-6 sm:py-8">
+          <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8">
+            {/* En-tete */}
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-2 min-w-0">
+                <p className="chip">Administration centrale</p>
+                <h1 className="text-2xl sm:text-3xl font-semibold text-[rgb(var(--ink))]">Pilotage global du backoffice</h1>
+                <p className="text-sm text-[rgba(15,42,46,0.6)] max-w-2xl">
+                  Vue d ensemble des demandes par domaine, des suivis agents et des points d attention prioritaires.
+                </p>
               </div>
-
-              <div className="surface-panel p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold">Actions rapides</h2>
-                  <ShieldCheck className="h-5 w-5 text-[rgba(15,42,46,0.55)]" />
-                </div>
-                <div className="space-y-3">
-                  {quickActions.map((action) => (
-                    <button
-                      key={action.label}
-                      onClick={action.onClick}
-                      className="w-full flex items-center justify-between surface-soft px-4 py-3 text-left hover:border-[rgba(15,42,46,0.2)] transition"
-                    >
-                      <div>
-                        <p className="text-sm font-medium">{action.label}</p>
-                        <p className="text-xs text-[rgba(15,42,46,0.5)]">{action.description}</p>
-                      </div>
-                      <ArrowUpRight className="h-4 w-4 text-[rgba(15,42,46,0.5)]" />
-                    </button>
-                  ))}
-                </div>
+              <div className="surface-soft px-4 py-2.5 flex items-center gap-2.5 shrink-0">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                </span>
+                <span className="text-xs font-medium text-[rgba(15,42,46,0.7)] whitespace-nowrap">
+                  Backoffice operationnel
+                </span>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            {/* KPI cles */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               {statCards.map((stat) => (
-                <div key={stat.title} className="surface-card p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-[rgba(15,42,46,0.6)]">{stat.title}</p>
-                      <p className="text-3xl font-semibold mt-2">
+                <div key={stat.title} className="surface-card p-4 sm:p-5 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs sm:text-sm text-[rgba(15,42,46,0.6)] truncate">{stat.title}</p>
+                      <p className="text-2xl sm:text-3xl font-semibold mt-1.5 text-[rgb(var(--ink))]">
                         {loading ? '...' : Number(stat.value || 0).toLocaleString()}
                       </p>
                     </div>
-                    <div className="h-12 w-12 rounded-2xl bg-[rgba(15,42,46,0.08)] flex items-center justify-center">
-                      <stat.icon className="h-6 w-6 text-[rgb(var(--ink))]" />
+                    <div
+                      className={`h-9 w-9 sm:h-11 sm:w-11 shrink-0 rounded-2xl flex items-center justify-center ${
+                        stat.highlight ? 'bg-[rgb(var(--clay))] text-white' : 'bg-[rgba(15,42,46,0.08)] text-[rgb(var(--ink))]'
+                      }`}
+                    >
+                      <stat.icon className="h-4 w-4 sm:h-5 sm:w-5" />
                     </div>
                   </div>
-                  <p className="text-xs text-[rgba(15,42,46,0.5)] mt-4">{stat.note}</p>
+                  <p className="text-[11px] sm:text-xs text-[rgba(15,42,46,0.5)] mt-3 truncate">{stat.note}</p>
                 </div>
               ))}
             </div>
 
-            <div className="grid grid-cols-1 gap-6">
-              <div className="surface-panel p-6">
+            {/* Actions rapides */}
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="text-xs font-semibold uppercase tracking-wide text-[rgba(15,42,46,0.42)] mr-1">
+                Actions rapides
+              </span>
+              {quickActions.map((action) => (
+                <button
+                  key={action.label}
+                  onClick={action.onClick}
+                  className="inline-flex items-center gap-2 rounded-full border border-[rgb(var(--line))] bg-white/70 pl-3 pr-4 py-2 text-xs sm:text-sm font-medium text-[rgb(var(--ink))] transition hover:border-[rgba(15,42,46,0.25)] hover:bg-white"
+                >
+                  <action.icon className="h-4 w-4 text-[rgba(15,42,46,0.55)]" />
+                  {action.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Pipeline operationnel par domaine */}
+            <div className="surface-panel p-5 sm:p-6">
+              <div className="flex items-center justify-between mb-5">
+                <div>
+                  <h2 className="text-lg font-semibold text-[rgb(var(--ink))]">Pipeline operationnel</h2>
+                  <p className="text-xs text-[rgba(15,42,46,0.5)] mt-1">Repartition des dossiers par etape, pour chaque domaine.</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {domainCards.map((card) => {
+                  const total = Math.max(1, card.pending + card.followUp + card.concluded);
+                  const pendingPct = (card.pending / total) * 100;
+                  const followUpPct = (card.followUp / total) * 100;
+                  const concludedPct = (card.concluded / total) * 100;
+                  const ramp = domainRamp[card.hue];
+                  return (
+                    <button
+                      key={card.key}
+                      type="button"
+                      onClick={card.action}
+                      className="group rounded-[20px] border border-[rgba(15,42,46,0.08)] bg-white/80 p-5 text-left transition hover:border-[rgba(15,42,46,0.2)] hover:shadow-[0_12px_28px_rgba(15,42,46,0.08)]"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl ${domainBadge[card.hue]}`}>
+                          <card.icon className="h-5 w-5" />
+                        </span>
+                        <ArrowUpRight className="h-4 w-4 text-[rgba(15,42,46,0.35)] transition group-hover:text-[rgba(15,42,46,0.6)]" />
+                      </div>
+                      <p className="mt-3 text-base font-semibold text-[rgb(var(--ink))]">{card.label}</p>
+
+                      {/* Barre proportionnelle des 3 etapes */}
+                      <div className="mt-4 flex h-2 w-full overflow-hidden rounded-full bg-[rgba(15,42,46,0.06)]">
+                        {card.pending > 0 && (
+                          <span className={domainBar[card.hue]} style={{ width: `${pendingPct}%`, opacity: 0.45 }} />
+                        )}
+                        {card.followUp > 0 && (
+                          <span className={domainBar[card.hue]} style={{ width: `${followUpPct}%`, opacity: 0.75 }} />
+                        )}
+                        {card.concluded > 0 && (
+                          <span className={domainBar[card.hue]} style={{ width: `${concludedPct}%` }} />
+                        )}
+                      </div>
+
+                      <div className="mt-4 flex items-stretch gap-2">
+                        <div className={`flex-1 min-w-0 rounded-xl px-2 py-2.5 text-center ${ramp[0]}`}>
+                          <p className="text-[9px] font-semibold uppercase tracking-wide opacity-80">Attente</p>
+                          <p className="mt-1 text-base font-semibold">{loading ? '...' : card.pending}</p>
+                        </div>
+                        <div className={`flex-1 min-w-0 rounded-xl px-2 py-2.5 text-center ${ramp[1]}`}>
+                          <p className="text-[9px] font-semibold uppercase tracking-wide opacity-80">Suivi</p>
+                          <p className="mt-1 text-base font-semibold">{loading ? '...' : card.followUp}</p>
+                        </div>
+                        <div className={`flex-1 min-w-0 rounded-xl px-2 py-2.5 text-center ${ramp[2]}`}>
+                          <p className="text-[9px] font-semibold uppercase tracking-wide opacity-80">Conclu</p>
+                          <p className="mt-1 text-base font-semibold">{loading ? '...' : card.concluded}</p>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Panneaux secondaires - hauteur egale, 3 colonnes sur grand ecran */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch">
+              <div className="surface-panel p-6 flex flex-col">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold">Repartition des roles</h2>
                   <Users className="h-5 w-5 text-[rgba(15,42,46,0.55)]" />
                 </div>
-                <div className="grid grid-cols-1 gap-3">
+                <div className="space-y-3 flex-1">
                   {roleStats.length === 0 && (
                     <p className="text-sm text-[rgba(15,42,46,0.5)]">Aucune donnee disponible.</p>
                   )}
                   {roleStats.map((item) => (
-                    <div key={item.label} className="surface-soft px-4 py-4 rounded-[22px]">
-                      <p className="text-xs uppercase tracking-[0.16em] text-[rgba(15,42,46,0.42)]">Role</p>
-                      <p className="mt-2 text-sm font-medium text-[rgb(var(--ink))] break-words">{item.label}</p>
-                      <p className="mt-4 text-2xl font-semibold text-[rgb(var(--ink))]">{item.value}</p>
+                    <div key={item.label}>
+                      <div className="flex items-baseline justify-between gap-2 mb-1.5">
+                        <p className="text-sm font-medium text-[rgb(var(--ink))] truncate capitalize">{item.label}</p>
+                        <p className="text-sm font-semibold text-[rgb(var(--ink))] shrink-0">{item.value}</p>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-[rgba(15,42,46,0.06)] overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-[rgb(var(--ink))]"
+                          style={{ width: `${Math.max(6, (item.value / maxRoleValue) * 100)}%` }}
+                        />
+                      </div>
                     </div>
                   ))}
                 </div>
+                {roleStats.length > 0 && (
+                  <div className="mt-5 pt-4 border-t border-[rgba(15,42,46,0.08)] flex items-center justify-between">
+                    <p className="text-xs text-[rgba(15,42,46,0.5)]">Total comptes actifs</p>
+                    <p className="text-sm font-semibold text-[rgb(var(--ink))]">
+                      {roleStats.reduce((sum, item) => sum + Number(item.value || 0), 0)}
+                    </p>
+                  </div>
+                )}
               </div>
 
-              <div className="surface-panel p-6">
+              <div className="surface-panel p-6 flex flex-col">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold">Messages recents</h2>
                   <Mail className="h-5 w-5 text-[rgba(15,42,46,0.55)]" />
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-3 flex-1">
                   {recentMessages.length === 0 && (
                     <p className="text-sm text-[rgba(15,42,46,0.5)]">Aucun message recent.</p>
                   )}
                   {recentMessages.map((message) => (
-                    <div key={message.uuid || message.id} className="surface-soft px-4 py-4 rounded-[22px]">
+                    <div key={message.uuid || message.id} className="surface-soft px-4 py-3.5 rounded-[18px]">
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-sm font-medium text-[rgb(var(--ink))] truncate">
                           {message.sender_name || message.sender?.full_name || 'Client'}
                         </p>
                         {!message.is_read && <span className="chip shrink-0">Nouveau</span>}
                       </div>
-                      <p className="mt-3 text-sm text-[rgba(15,42,46,0.62)] line-clamp-2 min-h-[2.5rem]">
+                      <p className="mt-2 text-sm text-[rgba(15,42,46,0.62)] line-clamp-2">
                         {message.subject || message.message || 'Nouveau message'}
                       </p>
                     </div>
@@ -403,23 +443,20 @@ const DashboardAdmin = () => {
                 </div>
               </div>
 
-              <div className="surface-panel p-6">
+              <div className="surface-panel p-6 flex flex-col">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-lg font-semibold">Points d attention</h2>
                   <Handshake className="h-5 w-5 text-[rgba(15,42,46,0.55)]" />
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-3 flex-1">
                   {recentAlerts.map((alert) => (
-                    <div key={alert.label} className="surface-soft px-4 py-4 rounded-[22px]">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-[rgb(var(--ink))]">{alert.label}</p>
-                          <p className="mt-2 text-xs text-[rgba(15,42,46,0.55)]">{alert.note}</p>
-                        </div>
-                        <div className="shrink-0 rounded-2xl bg-white px-3 py-2 text-center min-w-[64px]">
-                          <p className="text-[10px] uppercase tracking-[0.16em] text-[rgba(15,42,46,0.42)]">Total</p>
-                          <p className="mt-1 text-xl font-semibold text-[rgb(var(--ink))]">{loading ? '...' : alert.value}</p>
-                        </div>
+                    <div key={alert.label} className="surface-soft px-4 py-3.5 rounded-[18px] flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-[rgb(var(--ink))] truncate">{alert.label}</p>
+                        <p className="mt-1 text-xs text-[rgba(15,42,46,0.55)] truncate">{alert.note}</p>
+                      </div>
+                      <div className="shrink-0 rounded-full bg-[rgba(15,42,46,0.06)] h-10 w-10 flex items-center justify-center">
+                        <p className="text-sm font-semibold text-[rgb(var(--ink))]">{loading ? '...' : alert.value}</p>
                       </div>
                     </div>
                   ))}

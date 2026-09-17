@@ -4,6 +4,7 @@ import Sidebar from '../common/Sidebar';
 import { agentService } from '../../services/api';
 import { HardHat, Send, MessageSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { formatFcfa } from '../../utils/currency';
 
 const AgentConstructionAssignments = () => {
   const navigate = useNavigate();

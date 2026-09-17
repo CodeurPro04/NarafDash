@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { ROLES } from '../../utils/roles';
 import { normalizeAgentType } from '../../utils/agentType';
+import { adminService } from '../../services/api';
 import {
   LayoutDashboard,
   Users,
@@ -21,12 +22,62 @@ import {
   HardHat,
   ChevronDown,
   Plus,
-  Package
+  Package,
+  Video,
+  Activity,
 } from 'lucide-react';
+
+const SYSTEM_STATUS_POLL_MS = 45000;
+
+const STATUS_STYLES = {
+  operational: { dot: 'bg-emerald-500', ring: 'bg-emerald-400', label: 'Operationnel' },
+  degraded: { dot: 'bg-amber-500', ring: 'bg-amber-400', label: 'Degrade' },
+  down: { dot: 'bg-red-500', ring: 'bg-red-400', label: 'Hors service' },
+};
+
+const SystemStatusDot = ({ status }) => {
+  const style = STATUS_STYLES[status] || STATUS_STYLES.degraded;
+  return (
+    <span className="relative flex h-2 w-2 shrink-0">
+      {status === 'operational' && (
+        <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${style.ring} opacity-75`} />
+      )}
+      <span className={`relative inline-flex h-2 w-2 rounded-full ${style.dot}`} />
+    </span>
+  );
+};
 
 const Sidebar = () => {
   const { user } = useAuth();
   const location = useLocation();
+  const currentRole = user?.role?.slug || user?.role;
+
+  const [systemStatus, setSystemStatus] = useState(null);
+  const [systemStatusError, setSystemStatusError] = useState(false);
+
+  useEffect(() => {
+    if (currentRole !== ROLES.ADMIN) return undefined;
+
+    let cancelled = false;
+    const fetchStatus = async () => {
+      try {
+        const response = await adminService.getSystemStatus();
+        if (cancelled) return;
+        setSystemStatus(response?.data?.data || null);
+        setSystemStatusError(false);
+      } catch (err) {
+        if (cancelled) return;
+        setSystemStatusError(true);
+      }
+    };
+
+    fetchStatus();
+    const interval = setInterval(fetchStatus, SYSTEM_STATUS_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [currentRole]);
 
   const adminGroups = [
     {
@@ -34,6 +85,7 @@ const Sidebar = () => {
       icon: Building,
       children: [
         { path: '/admin/assignments', search: 'type=property', icon: FileText, label: 'Mes demandes' },
+        { path: '/admin/assignments', search: 'type=property&view=history', icon: FileText, label: 'Historique des demandes' },
         { path: '/admin/properties', search: 'view=list', icon: Building, label: 'Liste de propriete' },
         { path: '/admin/properties', search: 'view=create', icon: Plus, label: 'Ajout de propriete' },
       ],
@@ -43,8 +95,10 @@ const Sidebar = () => {
       icon: HardHat,
       children: [
         { path: '/admin/assignments', search: 'type=construction', icon: FileText, label: 'Mes demandes' },
+        { path: '/admin/assignments', search: 'type=construction&view=history', icon: FileText, label: 'Historique des demandes' },
         { path: '/admin/construction-projects', search: 'view=list', icon: HardHat, label: 'Liste des projets de construction' },
         { path: '/admin/construction-projects', search: 'view=create', icon: Plus, label: 'Ajout de projet de construction' },
+        { path: '/admin/construction-projects', search: 'view=video', icon: Video, label: 'Section video' },
       ],
     },
     {
@@ -60,6 +114,7 @@ const Sidebar = () => {
       icon: TrendingUp,
       children: [
         { path: '/admin/investments', search: 'view=requests', icon: FileText, label: 'Mes demandes' },
+        { path: '/admin/investments', search: 'view=history', icon: FileText, label: 'Historique des demandes' },
         { path: '/admin/investments', search: 'view=list', icon: TrendingUp, label: "Liste des projets d'investissement" },
         { path: '/admin/investments', search: 'view=create', icon: Plus, label: "Ajout de projet d'investissement" },
       ],
@@ -72,6 +127,7 @@ const Sidebar = () => {
       icon: Building,
       children: [
         { path: '/manager/assignments', search: 'type=property', icon: FileText, label: 'Mes demandes' },
+        { path: '/manager/assignments', search: 'type=property&view=history', icon: FileText, label: 'Historique des demandes' },
         { path: '/manager/properties', search: 'view=list', icon: Building, label: 'Liste de propriete' },
         { path: '/manager/properties', search: 'view=create', icon: Plus, label: 'Ajout de propriete' },
       ],
@@ -81,6 +137,7 @@ const Sidebar = () => {
       icon: HardHat,
       children: [
         { path: '/manager/assignments', search: 'type=construction', icon: FileText, label: 'Mes demandes' },
+        { path: '/manager/assignments', search: 'type=construction&view=history', icon: FileText, label: 'Historique des demandes' },
         { path: '/manager/construction-projects', search: 'view=list', icon: HardHat, label: 'Liste des projets de construction' },
         { path: '/manager/construction-projects', search: 'view=create', icon: Plus, label: 'Ajout de projet de construction' },
       ],
@@ -98,6 +155,7 @@ const Sidebar = () => {
       icon: TrendingUp,
       children: [
         { path: '/manager/investments', search: 'view=requests', icon: FileText, label: 'Mes demandes' },
+        { path: '/manager/investments', search: 'view=history', icon: FileText, label: 'Historique des demandes' },
         { path: '/manager/investments', search: 'view=list', icon: TrendingUp, label: "Liste des projets d'investissement" },
         { path: '/manager/investments', search: 'view=create', icon: Plus, label: "Ajout de projet d'investissement" },
       ],
@@ -132,7 +190,14 @@ const Sidebar = () => {
       { path: '/admin/partner-products', icon: Package, label: 'Produits partenaires' },
       { section: 'Parametres' },
       { path: '/admin/reports', icon: BarChart3, label: 'Rapports' },
-      { path: '/admin/house-models', icon: Building, label: 'Modeles maison' },
+      {
+        label: 'Modeles maison',
+        icon: Building,
+        children: [
+          { path: '/admin/house-models', search: 'view=list', icon: Building, label: 'Liste des modeles' },
+          { path: '/admin/house-models', search: 'view=create', icon: Plus, label: 'Ajouter un modele' },
+        ],
+      },
       { path: '/admin/catalog', icon: Settings, label: 'Catalogue' },
       { path: '/admin/profile', icon: Shield, label: 'Profil' },
     ],
@@ -240,7 +305,6 @@ const Sidebar = () => {
     ],
   };
 
-  const currentRole = user?.role?.slug || user?.role;
   const currentMenu = menuItems[currentRole] || [];
   const roleLabel = currentRole === ROLES.ADMIN
     ? 'Administration'
@@ -353,6 +417,41 @@ const Sidebar = () => {
           })}
         </div>
       </nav>
+
+      {currentRole === ROLES.ADMIN && (
+        <div className="px-4 pt-2 pb-1 border-t border-[rgba(255,253,250,0.08)]">
+          <div className="rounded-2xl bg-[rgba(255,253,250,0.06)] px-4 py-3 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <Activity className="h-3 w-3 text-[rgba(255,253,250,0.45)]" />
+                <p className="text-[10px] uppercase tracking-[0.2em] text-[rgba(255,253,250,0.45)]">Systeme</p>
+              </div>
+              {systemStatus && (
+                <span className="text-[10px] font-medium text-[rgba(255,253,250,0.5)] capitalize">
+                  {STATUS_STYLES[systemStatus.overall]?.label || systemStatus.overall}
+                </span>
+              )}
+            </div>
+            {systemStatusError ? (
+              <p className="text-[11px] text-[rgba(255,253,250,0.5)]">Etat indisponible</p>
+            ) : !systemStatus ? (
+              <p className="text-[11px] text-[rgba(255,253,250,0.5)]">Verification en cours...</p>
+            ) : (
+              <div className="space-y-1.5">
+                {systemStatus.services.map((service) => (
+                  <div key={service.key} className="flex items-center gap-2">
+                    <SystemStatusDot status={service.status} />
+                    <span className="text-[11px] text-[rgba(255,253,250,0.65)] flex-1 truncate">{service.label}</span>
+                    {service.detail && (
+                      <span className="text-[10px] text-[rgba(255,253,250,0.4)] shrink-0 whitespace-nowrap">{service.detail}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="p-4 border-t border-[rgba(255,253,250,0.08)]">
         <div className="rounded-2xl bg-[rgba(255,253,250,0.08)] px-4 py-3">

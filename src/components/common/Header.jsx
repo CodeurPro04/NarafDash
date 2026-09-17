@@ -157,6 +157,8 @@ const Header = () => {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Icone de notification desactivee a la demande de l'utilisateur */}
+            {false && (
             <div className="relative">
               <button
                 onClick={() => setShowNotifications((prev) => !prev)}
@@ -212,6 +214,7 @@ const Header = () => {
                 </div>
               )}
             </div>
+            )}
 
             <div className="hidden sm:flex items-center gap-3 px-3 py-2 rounded-2xl border border-[rgb(var(--line))] bg-white/70">
               <div className="h-9 w-9 rounded-full bg-[rgba(15,42,46,0.08)] flex items-center justify-center">

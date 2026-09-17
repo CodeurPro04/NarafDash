@@ -8,6 +8,7 @@ const AdminPartnershipManagement = () => {
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [filter, setFilter] = useState('pending');
   const [selected, setSelected] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
   const [contentSaving, setContentSaving] = useState(false);
@@ -35,24 +36,25 @@ const AdminPartnershipManagement = () => {
     return Array.isArray(list) ? list : [];
   };
 
-  const statusStyle = (status) => {
-    if (status === 'approved') return 'bg-emerald-50 text-emerald-700';
-    if (status === 'rejected') return 'bg-red-50 text-red-700';
-    if (status === 'pending') return 'bg-amber-50 text-amber-700';
-    if (status === 'suspended') return 'bg-slate-100 text-slate-700';
-    return 'bg-slate-100 text-slate-700';
+  const statusInfo = (status) => {
+    if (status === 'approved') return { label: 'Approuve', className: 'bg-emerald-100 text-emerald-700' };
+    if (status === 'rejected') return { label: 'Rejete', className: 'bg-rose-100 text-rose-700' };
+    if (status === 'pending') return { label: 'En attente', className: 'bg-amber-100 text-amber-700' };
+    if (status === 'suspended') return { label: 'Suspendu', className: 'bg-slate-100 text-slate-700' };
+    return { label: status || 'Inconnu', className: 'bg-slate-100 text-slate-700' };
   };
 
   const loadApplications = async () => {
     try {
       setLoading(true);
       setError('');
-      const response = await adminService.getAllPartnerships();
+      const response = await adminService.getAllPartnerships({
+        status: filter !== 'all' ? filter : undefined,
+        per_page: 100,
+      });
       const list = extractList(response);
       setApplications(list);
-      if (list.length > 0 && !selected) {
-        setSelected(list[0]);
-      }
+      setSelected(list.length > 0 ? list[0] : null);
     } catch (err) {
       console.error('Erreur chargement partenariats:', err);
       setError('Impossible de charger les demandes.');
@@ -63,7 +65,8 @@ const AdminPartnershipManagement = () => {
 
   useEffect(() => {
     loadApplications();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter]);
 
   const selectedServices = useMemo(() => selected?.services || [], [selected]);
   const selectedCertifications = useMemo(() => selected?.certifications || [], [selected]);
@@ -84,18 +87,11 @@ const AdminPartnershipManagement = () => {
     setRemoveCoverImage(false);
   }, [selected?.uuid]);
 
-  const updateLocalStatus = (uuid, status, reason = null) => {
-    setApplications((prev) => prev.map((item) => (
-      item.uuid === uuid ? { ...item, status, rejection_reason: reason } : item
-    )));
-    setSelected((prev) => (prev && prev.uuid === uuid ? { ...prev, status, rejection_reason: reason } : prev));
-  };
-
   const handleApprove = async () => {
     if (!selected?.uuid) return;
     try {
       await adminService.approvePartnership(selected.uuid);
-      updateLocalStatus(selected.uuid, 'approved');
+      await loadApplications();
     } catch (err) {
       console.error('Erreur validation partenariat:', err);
       setError('Erreur lors de la validation.');
@@ -123,8 +119,8 @@ const AdminPartnershipManagement = () => {
     }
     try {
       await adminService.rejectPartnership(selected.uuid, { rejection_reason: rejectReason.trim() });
-      updateLocalStatus(selected.uuid, 'rejected', rejectReason.trim());
       setRejectReason('');
+      await loadApplications();
     } catch (err) {
       console.error('Erreur rejet partenariat:', err);
       setError('Erreur lors du rejet.');
@@ -221,6 +217,24 @@ const AdminPartnershipManagement = () => {
               <div className="surface-panel p-4 text-sm text-[rgb(var(--clay))]">{error}</div>
             )}
 
+            {/* Filtres */}
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { key: 'all', label: 'Tous' },
+                { key: 'pending', label: 'En attente' },
+                { key: 'approved', label: 'Approuvés' },
+                { key: 'rejected', label: 'Rejetés' },
+              ].map((f) => (
+                <button
+                  key={f.key}
+                  onClick={() => setFilter(f.key)}
+                  className={filter === f.key ? 'btn-primary text-sm' : 'btn-ghost text-sm'}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-1 surface-panel p-0 overflow-hidden">
                 <div className="p-6 border-b border-[rgba(232,221,209,0.8)]">
@@ -233,7 +247,9 @@ const AdminPartnershipManagement = () => {
                   {loading ? (
                     <div className="p-6 text-sm text-[rgba(15,42,46,0.5)]">Chargement...</div>
                   ) : applications.length === 0 ? (
-                    <div className="p-6 text-sm text-[rgba(15,42,46,0.5)]">Aucune demande.</div>
+                    <div className="p-6 text-sm text-[rgba(15,42,46,0.5)]">
+                      Aucune demande {filter === 'pending' ? 'en attente' : filter === 'approved' ? 'approuvée' : filter === 'rejected' ? 'rejetée' : ''}.
+                    </div>
                   ) : (
                     applications.map((item) => (
                       <button
@@ -243,17 +259,24 @@ const AdminPartnershipManagement = () => {
                           selected?.uuid === item.uuid ? 'bg-[rgba(15,42,46,0.08)]' : 'hover:bg-[rgba(15,42,46,0.04)]'
                         }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-semibold">{item.company_name}</p>
-                            <p className="text-xs text-[rgba(15,42,46,0.5)]">{item.company_type || 'Entreprise'}</p>
+                        <div className="flex items-start gap-3">
+                          <div className="h-10 w-10 rounded-lg bg-[rgba(15,42,46,0.06)] flex items-center justify-center flex-shrink-0">
+                            <Building2 className="h-5 w-5 text-[rgba(15,42,46,0.4)]" />
                           </div>
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full ${statusStyle(item.status)}`}>
-                            {item.status}
-                          </span>
-                        </div>
-                        <div className="mt-2 text-xs text-[rgba(15,42,46,0.5)]">
-                          {item.city || 'Ville non renseignee'}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold truncate">{item.company_name}</p>
+                                <p className="text-xs text-[rgba(15,42,46,0.5)]">{item.company_type || 'Entreprise'}</p>
+                              </div>
+                              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${statusInfo(item.status).className}`}>
+                                {statusInfo(item.status).label}
+                              </span>
+                            </div>
+                            <div className="mt-2 text-xs text-[rgba(15,42,46,0.5)]">
+                              {item.city || 'Ville non renseignee'}
+                            </div>
+                          </div>
                         </div>
                       </button>
                     ))
@@ -280,8 +303,8 @@ const AdminPartnershipManagement = () => {
                         <div>
                           <h2 className="text-xl font-semibold">{selected.company_name}</h2>
                           <p className="text-sm text-[rgba(15,42,46,0.6)]">{selected.company_type}</p>
-                          <span className={`inline-flex mt-2 text-xs px-2 py-1 rounded-full ${statusStyle(selected.status)}`}>
-                            {selected.status}
+                          <span className={`inline-flex mt-2 text-xs font-semibold px-2 py-1 rounded-full ${statusInfo(selected.status).className}`}>
+                            {statusInfo(selected.status).label}
                           </span>
                         </div>
                       </div>

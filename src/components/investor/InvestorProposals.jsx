@@ -3,6 +3,7 @@ import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
 import { investorService } from '../../services/api';
 import { FileText, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { formatFcfa } from '../../utils/currency';
 
 const InvestorProposals = () => {
   const [proposals, setProposals] = useState([]);
@@ -19,10 +20,34 @@ const InvestorProposals = () => {
     try {
       setLoading(true);
       setError('');
-      const response = await investorService.getMyProposals();
-      const payload = extractPayload(response);
-      const list = payload.data || payload;
-      setProposals(Array.isArray(list) ? list : []);
+      const [proposalsRes, clientRequestsRes] = await Promise.all([
+        investorService.getMyProposals(),
+        investorService.getMyClientRequests(),
+      ]);
+
+      const proposalsPayload = extractPayload(proposalsRes);
+      const proposalsList = proposalsPayload.data || proposalsPayload;
+      const normalizedProposals = (Array.isArray(proposalsList) ? proposalsList : []).map((proposal) => ({
+        uuid: proposal.uuid || proposal.id,
+        source: 'proposal',
+        title: proposal.investment_project?.title || proposal.investmentProject?.title || 'Projet investissement',
+        amount: proposal.amount,
+        status: proposal.status,
+      }));
+
+      // Demandes envoyees via le formulaire public "etre recontacte" (meme projet,
+      // autre point d'entree) — on les affiche aussi pour que rien ne soit invisible.
+      const clientRequestsPayload = extractPayload(clientRequestsRes);
+      const clientRequestsList = clientRequestsPayload.data || clientRequestsPayload;
+      const normalizedClientRequests = (Array.isArray(clientRequestsList) ? clientRequestsList : []).map((item) => ({
+        uuid: item.uuid || item.id,
+        source: 'client_request',
+        title: item.investment_project?.title || item.investmentProject?.title || 'Projet investissement',
+        message: item.message,
+        status: item.status,
+      }));
+
+      setProposals([...normalizedProposals, ...normalizedClientRequests]);
     } catch (err) {
       console.error('Erreur chargement propositions:', err);
       setError(err.response?.data?.message || 'Impossible de charger vos propositions.');
@@ -34,9 +59,14 @@ const InvestorProposals = () => {
   const statusLabel = (status) => {
     switch (status) {
       case 'approved':
-        return { label: 'Approuvee', icon: CheckCircle };
+      case 'agent_approved':
+      case 'deal_concluded':
+        return { label: status === 'deal_concluded' ? 'Investissement conclu' : 'Approuvee', icon: CheckCircle };
       case 'rejected':
+      case 'agent_rejected':
         return { label: 'Refusee', icon: XCircle };
+      case 'assigned':
+        return { label: 'Prise en charge par un agent', icon: Clock };
       default:
         return { label: 'En attente', icon: Clock };
     }
@@ -79,10 +109,12 @@ const InvestorProposals = () => {
                         </div>
                         <div>
                           <p className="text-sm font-medium">
-                            {proposal.investment_project?.title || 'Projet investissement'}
+                            {proposal.title}
                           </p>
                           <p className="text-xs text-[rgba(15,42,46,0.5)]">
-                            Montant: {formatFcfa(proposal.amount)}
+                            {proposal.amount != null
+                              ? `Montant: ${formatFcfa(proposal.amount)}`
+                              : proposal.message || 'Demande envoyee'}
                           </p>
                         </div>
                       </div>

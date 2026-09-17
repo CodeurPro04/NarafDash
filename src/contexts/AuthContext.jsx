@@ -30,20 +30,37 @@ export const AuthProvider = ({ children }) => {
       const storedUser = localStorage.getItem("user");
 
       if (token && storedUser) {
-        const profileResponse = await profileService.getProfile();
-        const freshUser = profileResponse?.data?.data?.user;
         const fallbackUser = JSON.parse(storedUser);
-        const nextUser = freshUser || fallbackUser;
+        // Affiche immediatement la session en cache pendant la verification,
+        // pour eviter tout flash de deconnexion le temps de la requete.
+        setUser(fallbackUser);
 
-        if (nextUser?.is_active === false) {
-          clearStoredSession();
-          setUser(null);
-        } else {
-          setUser(nextUser);
-          localStorage.setItem("user", JSON.stringify(nextUser));
+        try {
+          const profileResponse = await profileService.getProfile();
+          const freshUser = profileResponse?.data?.data?.user;
+          const nextUser = freshUser || fallbackUser;
+
+          if (nextUser?.is_active === false) {
+            clearStoredSession();
+            setUser(null);
+          } else {
+            setUser(nextUser);
+            localStorage.setItem("user", JSON.stringify(nextUser));
+          }
+        } catch (error) {
+          // Ne deconnecter que si le token est reellement invalide/expire
+          // (401/419). Toute autre erreur (reseau, 5xx, timeout, CORS...) est
+          // transitoire : on garde la session en cache plutot que de forcer
+          // une reconnexion a chaque rafraichissement de page.
+          const status = error?.response?.status;
+          if (status === 401 || status === 419) {
+            clearStoredSession();
+            setUser(null);
+          }
         }
       }
     } catch (error) {
+      // Session locale illisible (ex: JSON corrompu) : on repart propre.
       clearStoredSession();
       setUser(null);
     } finally {

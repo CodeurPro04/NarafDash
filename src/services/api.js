@@ -45,6 +45,26 @@ api.interceptors.response.use(
   },
 );
 
+// PHP/Laravel ne parse jamais un corps multipart sur une requête HTTP PUT
+// (seul POST est parsé) : $request reste vide côté serveur et la mise à
+// jour échoue silencieusement (200 OK mais aucun champ/fichier appliqué).
+// On bascule donc en POST + `_method=PUT` (method override natif de
+// Laravel/Symfony) dès que le payload est un FormData ; sinon on garde un
+// vrai PUT JSON classique.
+const apiUpdate = (url, data, config) => {
+  if (data instanceof FormData) {
+    data.append("_method", "PUT");
+    return api.post(url, data, {
+      ...config,
+      headers: {
+        ...(config?.headers || {}),
+        "Content-Type": "multipart/form-data",
+      },
+    });
+  }
+  return api.put(url, data, config);
+};
+
 // ====================
 // SERVICES PUBLICS (sans authentification)
 // ====================
@@ -65,6 +85,11 @@ export const publicPropertyService = {
   getByType: (slug) => api.get(`/v1/properties/type/${slug}`),
   getByCity: (city) => api.get(`/v1/properties/city/${city}`),
   getFeatured: () => api.get("/v1/properties/featured"),
+};
+
+// Pays (référentiel public)
+export const countryService = {
+  getAll: () => api.get("/v1/countries"),
 };
 
 // Types de propriétés publiques
@@ -91,14 +116,7 @@ export const publicConstructionService = {
 // Profil utilisateur
 export const profileService = {
   getProfile: () => api.get("/v1/auth/profile"),
-  updateProfile: (data) =>
-    api.put(
-      "/v1/auth/profile",
-      data,
-      data instanceof FormData
-        ? { headers: { "Content-Type": "multipart/form-data" } }
-        : undefined,
-    ),
+  updateProfile: (data) => apiUpdate("/v1/auth/profile", data),
   changePassword: (data) => api.post("/v1/auth/change-password", data),
   logout: () => api.post("/v1/auth/logout"),
 };
@@ -120,12 +138,13 @@ export const adminService = {
   // Dashboard
   getDashboard: () => api.get("/v1/admin/dashboard"),
   getStatistics: () => api.get("/v1/admin/statistics"),
+  getSystemStatus: () => api.get("/v1/admin/system/status"),
 
   // Gestion des utilisateurs
   getUsers: (params) => api.get("/v1/admin/users", { params }),
   createUser: (data) => api.post("/v1/admin/users", data),
   getUser: (id) => api.get(`/v1/admin/users/${id}`),
-  updateUser: (id, data) => api.put(`/v1/admin/users/${id}`, data),
+  updateUser: (id, data) => apiUpdate(`/v1/admin/users/${id}`, data),
   updateUserRole: (id, role) =>
     api.post(`/v1/admin/users/${id}/assign-role`, { role }),
   deleteUser: (id) => api.delete(`/v1/admin/users/${id}`),
@@ -135,7 +154,7 @@ export const adminService = {
   // Gestion des rôles
   getRoles: () => api.get("/v1/admin/checkroles"),
   createRole: (data) => api.post("/v1/admin/checkroles", data),
-  updateRole: (id, data) => api.put(`/v1/admin/checkroles/${id}`, data),
+  updateRole: (id, data) => apiUpdate(`/v1/admin/checkroles/${id}`, data),
 
   // Gestion complète des propriétés
   getAllProperties: (params) => api.get("/v1/admin/properties/all", { params }),
@@ -150,13 +169,7 @@ export const adminService = {
         : undefined,
     ),
   updateProperty: (uuid, data) =>
-    api.put(
-      `/v1/admin/properties/${uuid}`,
-      data,
-      data instanceof FormData
-        ? { headers: { "Content-Type": "multipart/form-data" } }
-        : undefined,
-    ),
+    apiUpdate(`/v1/admin/properties/${uuid}`, data),
   deleteProperty: (uuid) => api.delete(`/v1/admin/properties/${uuid}`),
   forceDeleteProperty: (uuid) => api.delete(`/v1/admin/properties/${uuid}`),
   toggleFeaturedProperty: (uuid) =>
@@ -165,7 +178,7 @@ export const adminService = {
     api.post(`/v1/admin/properties/${uuid}/status`, data),
 
   // Projets d'investissement
-  getInvestments: () => api.get("/v1/admin/investments"),
+  getInvestments: (params) => api.get("/v1/admin/investments", { params }),
   createInvestment: (data) =>
     api.post(
       "/v1/admin/investments",
@@ -175,13 +188,7 @@ export const adminService = {
         : undefined,
     ),
   updateInvestment: (uuid, data) =>
-    api.put(
-      `/v1/admin/investments/${uuid}`,
-      data,
-      data instanceof FormData
-        ? { headers: { "Content-Type": "multipart/form-data" } }
-        : undefined,
-    ),
+    apiUpdate(`/v1/admin/investments/${uuid}`, data),
   deleteInvestment: (uuid) => api.delete(`/v1/admin/investments/${uuid}`),
   approveInvestment: (uuid) =>
     api.post(`/v1/admin/investments/${uuid}/approve`),
@@ -194,7 +201,7 @@ export const adminService = {
     api.post(`/v1/admin/investments/proposals/${uuid}/reject`),
 
   // Modeles de maison
-  getHouseModels: () => api.get("/v1/admin/house-models"),
+  getHouseModels: (params) => api.get("/v1/admin/house-models", { params }),
   updateHouseModelsSection: (data) =>
     api.post("/v1/admin/house-models/section", data),
   createHouseModel: (data) =>
@@ -206,13 +213,7 @@ export const adminService = {
         : undefined,
     ),
   updateHouseModel: (uuid, data) =>
-    api.put(
-      `/v1/admin/house-models/${uuid}`,
-      data,
-      data instanceof FormData
-        ? { headers: { "Content-Type": "multipart/form-data" } }
-        : undefined,
-    ),
+    apiUpdate(`/v1/admin/house-models/${uuid}`, data),
   deleteHouseModel: (uuid) => api.delete(`/v1/admin/house-models/${uuid}`),
 
   // Partenariats
@@ -221,7 +222,7 @@ export const adminService = {
     api.post(`/v1/admin/partnerships/${uuid}/approve`),
   rejectPartnership: (uuid, data) =>
     api.post(`/v1/admin/partnerships/${uuid}/reject`, data),
-  getAllPartnerships: () => api.get("/v1/admin/partnerships/all"),
+  getAllPartnerships: (params) => api.get("/v1/admin/partnerships/all", { params }),
   updatePartnershipContent: (uuid, data) =>
     api.post(
       `/v1/admin/partnerships/${uuid}/content`,
@@ -235,14 +236,14 @@ export const adminService = {
   // Types de propriétés
   createPropertyType: (data) => api.post("/v1/admin/property-types", data),
   updatePropertyType: (id, data) =>
-    api.put(`/v1/admin/property-types/${id}`, data),
+    apiUpdate(`/v1/admin/property-types/${id}`, data),
   deletePropertyType: (id) => api.delete(`/v1/admin/property-types/${id}`),
 
   // Caracteristiques
   createPropertyFeature: (data) =>
     api.post("/v1/admin/property-features", data),
   updatePropertyFeature: (id, data) =>
-    api.put(`/v1/admin/property-features/${id}`, data),
+    apiUpdate(`/v1/admin/property-features/${id}`, data),
   deletePropertyFeature: (id) =>
     api.delete(`/v1/admin/property-features/${id}`),
 
@@ -250,11 +251,13 @@ export const adminService = {
   getMessages: (params) => api.get("/v1/admin/messages", { params }),
   getMessage: (uuid) => api.get(`/v1/admin/messages/${uuid}`),
   createMessage: (data) => api.post("/v1/admin/messages", data),
-  updateMessage: (uuid, data) => api.put(`/v1/admin/messages/${uuid}`, data),
+  updateMessage: (uuid, data) => apiUpdate(`/v1/admin/messages/${uuid}`, data),
   deleteMessage: (uuid) => api.delete(`/v1/admin/messages/${uuid}`),
   markMessageAsRead: (uuid) => api.post(`/v1/admin/messages/${uuid}/mark-read`),
   replyToMessage: (uuid, data) =>
     api.post(`/v1/admin/messages/${uuid}/reply`, data),
+  archiveMessage: (uuid) => api.post(`/v1/admin/messages/${uuid}/archive`),
+  unarchiveMessage: (uuid) => api.post(`/v1/admin/messages/${uuid}/unarchive`),
 
   // Paramètres système
   getSettings: () => api.get("/v1/admin/settings"),
@@ -269,16 +272,20 @@ export const adminService = {
   getTransactionsReport: () => api.get("/v1/admin/reports/transactions"),
 
   // Demandes de recherche
-  getPendingSearchRequests: () => api.get("/v1/admin/search-requests/pending"),
-  getSearchRequestHistory: () => api.get("/v1/admin/search-requests/history"),
+  getPendingSearchRequests: (params) =>
+    api.get("/v1/admin/search-requests/pending", { params }),
+  getSearchRequestHistory: (params) =>
+    api.get("/v1/admin/search-requests/history", { params }),
   assignSearchRequest: (uuid, data) =>
     api.post(`/v1/admin/search-requests/${uuid}/assign`, data),
   approveSearchRequest: (uuid) =>
     api.post(`/v1/admin/search-requests/${uuid}/approve`),
-  rejectSearchRequest: (uuid) =>
-    api.post(`/v1/admin/search-requests/${uuid}/reject`),
+  rejectSearchRequest: (uuid, data) =>
+    api.post(`/v1/admin/search-requests/${uuid}/reject`, data),
 
   // Projets de construction
+  getAllConstructionProjects: (params) =>
+    api.get("/v1/admin/construction/all", { params }),
   getPendingConstructionProjects: () =>
     api.get("/v1/admin/construction/pending"),
   getConstructionHistory: () => api.get("/v1/admin/construction/history"),
@@ -299,21 +306,15 @@ export const adminService = {
         : undefined,
     ),
   updateConstructionProject: (uuid, data) =>
-    api.put(
-      `/v1/admin/construction/${uuid}`,
-      data,
-      data instanceof FormData
-        ? { headers: { "Content-Type": "multipart/form-data" } }
-        : undefined,
-    ),
+    apiUpdate(`/v1/admin/construction/${uuid}`, data),
   deleteConstructionProject: (uuid) =>
     api.delete(`/v1/admin/construction/${uuid}`),
 
   // Demandes de propriete
-  getPendingPropertyRequests: () =>
-    api.get("/v1/admin/property-requests/pending"),
-  getPropertyRequestHistory: () =>
-    api.get("/v1/admin/property-requests/history"),
+  getPendingPropertyRequests: (params) =>
+    api.get("/v1/admin/property-requests/pending", { params }),
+  getPropertyRequestHistory: (params) =>
+    api.get("/v1/admin/property-requests/history", { params }),
   approvePropertyRequest: (uuid) =>
     api.post(`/v1/admin/property-requests/${uuid}/approve`),
   rejectPropertyRequest: (uuid, data) =>
@@ -322,8 +323,10 @@ export const adminService = {
     api.post(`/v1/admin/property-requests/${uuid}/assign`, data),
 
   // Demandes clients
-  getPendingClientRequests: () => api.get("/v1/admin/client-requests/pending"),
-  getClientRequestHistory: () => api.get("/v1/admin/client-requests/history"),
+  getPendingClientRequests: (params) =>
+    api.get("/v1/admin/client-requests/pending", { params }),
+  getClientRequestHistory: (params) =>
+    api.get("/v1/admin/client-requests/history", { params }),
   approveClientRequest: (uuid) =>
     api.post(`/v1/admin/client-requests/${uuid}/approve`),
   rejectClientRequest: (uuid, data) =>
@@ -350,31 +353,27 @@ export const managerService = {
         : undefined,
     ),
   updateProperty: (uuid, data) =>
-    api.put(
-      `/v1/gestionnaire/properties/${uuid}`,
-      data,
-      data instanceof FormData
-        ? { headers: { "Content-Type": "multipart/form-data" } }
-        : undefined,
-    ),
+    apiUpdate(`/v1/gestionnaire/properties/${uuid}`, data),
   assignProperty: (uuid, data) =>
     api.post(`/v1/gestionnaire/properties/${uuid}/assign`, data),
   updatePropertyStatus: (uuid, data) =>
     api.post(`/v1/gestionnaire/properties/${uuid}/status`, data),
 
   // Gestion des demandes de recherche
-  getPendingSearchRequests: () =>
-    api.get("/v1/gestionnaire/search-requests/pending"),
-  getSearchRequestHistory: () =>
-    api.get("/v1/gestionnaire/search-requests/history"),
+  getPendingSearchRequests: (params) =>
+    api.get("/v1/gestionnaire/search-requests/pending", { params }),
+  getSearchRequestHistory: (params) =>
+    api.get("/v1/gestionnaire/search-requests/history", { params }),
   assignSearchRequest: (uuid, data) =>
     api.post(`/v1/gestionnaire/search-requests/${uuid}/assign`, data),
   approveSearchRequest: (uuid) =>
     api.post(`/v1/gestionnaire/search-requests/${uuid}/approve`),
-  rejectSearchRequest: (uuid) =>
-    api.post(`/v1/gestionnaire/search-requests/${uuid}/reject`),
+  rejectSearchRequest: (uuid, data) =>
+    api.post(`/v1/gestionnaire/search-requests/${uuid}/reject`, data),
 
   // Gestion des projets de construction
+  getAllConstructionProjects: (params) =>
+    api.get("/v1/gestionnaire/construction/all", { params }),
   getPendingConstructionProjects: () =>
     api.get("/v1/gestionnaire/construction/pending"),
   getConstructionHistory: () =>
@@ -394,13 +393,7 @@ export const managerService = {
         : undefined,
     ),
   updateConstructionProject: (uuid, data) =>
-    api.put(
-      `/v1/gestionnaire/construction/${uuid}`,
-      data,
-      data instanceof FormData
-        ? { headers: { "Content-Type": "multipart/form-data" } }
-        : undefined,
-    ),
+    apiUpdate(`/v1/gestionnaire/construction/${uuid}`, data),
   deleteConstructionProject: (uuid) =>
     api.delete(`/v1/gestionnaire/construction/${uuid}`),
 
@@ -411,10 +404,10 @@ export const managerService = {
   getAvailableAgents: () => api.get("/v1/gestionnaire/agents"),
 
   // Demandes de propriete
-  getPendingPropertyRequests: () =>
-    api.get("/v1/gestionnaire/property-requests/pending"),
-  getPropertyRequestHistory: () =>
-    api.get("/v1/gestionnaire/property-requests/history"),
+  getPendingPropertyRequests: (params) =>
+    api.get("/v1/gestionnaire/property-requests/pending", { params }),
+  getPropertyRequestHistory: (params) =>
+    api.get("/v1/gestionnaire/property-requests/history", { params }),
   approvePropertyRequest: (uuid) =>
     api.post(`/v1/gestionnaire/property-requests/${uuid}/approve`),
   rejectPropertyRequest: (uuid, data) =>
@@ -423,7 +416,7 @@ export const managerService = {
     api.post(`/v1/gestionnaire/property-requests/${uuid}/assign`, data),
 
   // Projets d'investissement
-  getInvestments: () => api.get("/v1/gestionnaire/investments"),
+  getInvestments: (params) => api.get("/v1/gestionnaire/investments", { params }),
   createInvestment: (data) =>
     api.post(
       "/v1/gestionnaire/investments",
@@ -433,13 +426,7 @@ export const managerService = {
         : undefined,
     ),
   updateInvestment: (uuid, data) =>
-    api.put(
-      `/v1/gestionnaire/investments/${uuid}`,
-      data,
-      data instanceof FormData
-        ? { headers: { "Content-Type": "multipart/form-data" } }
-        : undefined,
-    ),
+    apiUpdate(`/v1/gestionnaire/investments/${uuid}`, data),
   deleteInvestment: (uuid) =>
     api.delete(`/v1/gestionnaire/investments/${uuid}`),
   approveInvestment: (uuid) =>
@@ -448,10 +435,10 @@ export const managerService = {
     api.post(`/v1/gestionnaire/investments/${uuid}/reject`, data),
 
   // Demandes clients
-  getPendingClientRequests: () =>
-    api.get("/v1/gestionnaire/client-requests/pending"),
-  getClientRequestHistory: () =>
-    api.get("/v1/gestionnaire/client-requests/history"),
+  getPendingClientRequests: (params) =>
+    api.get("/v1/gestionnaire/client-requests/pending", { params }),
+  getClientRequestHistory: (params) =>
+    api.get("/v1/gestionnaire/client-requests/history", { params }),
   approveClientRequest: (uuid) =>
     api.post(`/v1/gestionnaire/client-requests/${uuid}/approve`),
   rejectClientRequest: (uuid, data) =>
@@ -476,7 +463,7 @@ export const agentService = {
       headers: { "Content-Type": "multipart/form-data" },
     }),
   getAllProperties: (params) => api.get("/v1/agent/properties/all", { params }),
-  updateProperty: (uuid, data) => api.put(`/v1/agent/properties/${uuid}`, data),
+  updateProperty: (uuid, data) => apiUpdate(`/v1/agent/properties/${uuid}`, data),
 
   // Messages clients
   getMessages: () => api.get("/v1/agent/messages"),
@@ -518,13 +505,7 @@ export const agentService = {
         : undefined,
     ),
   updateConstructionPublication: (uuid, data) =>
-    api.put(
-      `/v1/agent/construction/publications/${uuid}`,
-      data,
-      data instanceof FormData
-        ? { headers: { "Content-Type": "multipart/form-data" } }
-        : undefined,
-    ),
+    apiUpdate(`/v1/agent/construction/publications/${uuid}`, data),
 
   // Demandes de propriete
   getAssignedPropertyRequests: () =>
@@ -559,13 +540,7 @@ export const agentService = {
         : undefined,
     ),
   updateInvestmentPublication: (uuid, data) =>
-    api.put(
-      `/v1/agent/investments/publications/${uuid}`,
-      data,
-      data instanceof FormData
-        ? { headers: { "Content-Type": "multipart/form-data" } }
-        : undefined,
-    ),
+    apiUpdate(`/v1/agent/investments/publications/${uuid}`, data),
 };
 
 // ====================
@@ -581,7 +556,7 @@ export const ownerService = {
       headers: { "Content-Type": "multipart/form-data" },
     }),
   updateProperty: (uuid, data) =>
-    api.put(`/v1/proprietaire/properties/${uuid}`, data),
+    apiUpdate(`/v1/proprietaire/properties/${uuid}`, data),
   deleteProperty: (uuid) => api.delete(`/v1/proprietaire/properties/${uuid}`),
   addPropertyImages: (uuid, data) =>
     api.post(`/v1/proprietaire/properties/${uuid}/add-images`, data, {
@@ -618,7 +593,7 @@ export const visitorService = {
 
   // Projets de construction
   submitConstructionRequest: (data) =>
-    api.post("/v1/visiteur/construction/request"),
+    api.post("/v1/visiteur/construction/request", data),
   getMyConstructionRequests: () =>
     api.get("/v1/visiteur/construction/my-requests"),
 };
@@ -630,10 +605,13 @@ export const visitorService = {
 export const investorService = {
   // Propositions d'investissement
   proposeInvestment: (uuid, data) =>
-    api.post(`/v1/investisseur/investments/${uuid}/propose`, data),
+    api.post(`/v1/investments/${uuid}/propose`, data),
   getMyProposals: () => api.get("/v1/investisseur/investments/my-proposals"),
   getProposalDetails: (uuid) =>
     api.get(`/v1/investisseur/investments/proposals/${uuid}`),
+  // Demandes envoyées via le formulaire public "être recontacté" (ClientRequest)
+  getMyClientRequests: () =>
+    api.get("/v1/client-requests/mine", { params: { request_type: "investissement" } }),
 };
 
 // ====================
@@ -658,14 +636,7 @@ export const companyService = {
         : undefined,
     ),
   getMyApplication: () => api.get("/v1/partnership/my-application"),
-  updateApplication: (data) =>
-    api.put(
-      "/v1/partnership/update",
-      data,
-      data instanceof FormData
-        ? { headers: { "Content-Type": "multipart/form-data" } }
-        : undefined,
-    ),
+  updateApplication: (data) => apiUpdate("/v1/partnership/update", data),
 };
 
 export default api;

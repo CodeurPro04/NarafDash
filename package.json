@@ -14,6 +14,7 @@
     "@supabase/supabase-js": "^2.57.4",
     "axios": "^1.13.2",
     "laravel-echo": "^1.16.1",
+    "leaflet": "^1.9.4",
     "lucide-react": "^0.344.0",
     "pusher-js": "^8.4.0",
     "react": "^18.3.1",

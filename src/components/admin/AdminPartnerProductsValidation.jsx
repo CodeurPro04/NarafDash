@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { CheckCircle, XCircle, Clock, Package, ChevronLeft, ChevronRight, Eye, AlertCircle } from 'lucide-react';
 import { partnerProductService } from '../../services/api';
+import Header from '../common/Header';
+import Sidebar from '../common/Sidebar';
 
 const STATUS_CONFIG = {
   pending:  { label: 'En attente',  className: 'chip-warning' },
@@ -29,7 +31,7 @@ const AdminPartnerProductsValidation = () => {
     try {
       const res = filter === 'pending'
         ? await partnerProductService.getPending()
-        : await partnerProductService.getAll({ status: filter });
+        : await partnerProductService.getAll({ status: filter !== 'all' ? filter : undefined, per_page: 100 });
       const data = res?.data?.data ?? res?.data ?? [];
       const list = Array.isArray(data) ? data : data?.data ?? [];
       setProducts(list);
@@ -74,11 +76,16 @@ const AdminPartnerProductsValidation = () => {
   const td = selected?.type_data || {};
 
   return (
-    <div className="space-y-6">
+    <div className="app-shell flex">
+      <Sidebar />
+      <div className="flex-1 flex flex-col">
+        <Header />
+        <main className="flex-1 px-6 py-8">
+          <div className="max-w-7xl mx-auto space-y-6">
       <div>
-        <p className="chip">Partenaires</p>
-        <h1 className="text-2xl font-semibold mt-2">Validation des produits</h1>
-        <p className="text-sm text-[rgba(15,42,46,0.6)] mt-1">
+        <p className="chip">Administration</p>
+        <h1 className="text-3xl font-semibold mt-3">Produits partenaires</h1>
+        <p className="text-sm text-[rgba(15,42,46,0.6)] mt-2">
           Approuvez ou rejetez les produits soumis par les partenaires.
         </p>
       </div>
@@ -92,6 +99,7 @@ const AdminPartnerProductsValidation = () => {
       {/* Filtres */}
       <div className="flex gap-2 flex-wrap">
         {[
+          { key: 'all', label: 'Tous' },
           { key: 'pending', label: 'En attente' },
           { key: 'approved', label: 'Approuvés' },
           { key: 'rejected', label: 'Rejetés' },
@@ -121,7 +129,7 @@ const AdminPartnerProductsValidation = () => {
               </div>
             ) : products.length === 0 ? (
               <div className="px-4 py-8 text-center text-sm text-[rgba(15,42,46,0.5)]">
-                Aucun produit {filter === 'pending' ? 'en attente' : filter === 'approved' ? 'approuvé' : 'rejeté'}.
+                Aucun produit{filter === 'pending' ? ' en attente' : filter === 'approved' ? ' approuvé' : filter === 'rejected' ? ' rejeté' : ''}.
               </div>
             ) : (
               <div className="divide-y divide-[rgba(15,42,46,0.06)]">
@@ -292,6 +300,9 @@ const AdminPartnerProductsValidation = () => {
             </div>
           )}
         </div>
+      </div>
+          </div>
+        </main>
       </div>
     </div>
   );

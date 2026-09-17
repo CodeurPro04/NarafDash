@@ -5,7 +5,7 @@ import Sidebar from '../common/Sidebar';
 import { adminService, managerService } from '../../services/api';
 import ClientRequestDomainSections from '../admin/ClientRequestDomainSections';
 import { useAuth } from '../../contexts/AuthContext';
-import { UserCheck, FileText, HardHat, CheckCircle, XCircle, Home, Search } from 'lucide-react';
+import { UserCheck, FileText, HardHat, CheckCircle, XCircle, Home, Search, ChevronLeft, ChevronRight, Clock, Users, X, UserCog } from 'lucide-react';
 
 const ManagerAssignments = () => {
   const [agents, setAgents] = useState([]);
@@ -26,11 +26,23 @@ const ManagerAssignments = () => {
   const [activeDecision, setActiveDecision] = useState('all');
   const [activeAgent, setActiveAgent] = useState('all');
   const [scopedSearchTerm, setScopedSearchTerm] = useState('');
+  // Pagination dediee aux demandes de propriete (l'onglet "Mes demandes" du
+  // domaine Propriete) : ces deux listes sont paginees cote serveur (15/page),
+  // independamment du reste (recherche/construction/clients), qui garde son
+  // comportement d'origine.
+  const [propertyPage, setPropertyPage] = useState(1);
+  const [propertyLastPage, setPropertyLastPage] = useState(1);
+  const [propertyTotal, setPropertyTotal] = useState(0);
+  const [propertyHistoryPage, setPropertyHistoryPage] = useState(1);
+  const [propertyHistoryLastPage, setPropertyHistoryLastPage] = useState(1);
+  const [propertyHistoryTotal, setPropertyHistoryTotal] = useState(0);
   const { user } = useAuth();
   const location = useLocation();
   const viewType = new URLSearchParams(location.search).get('type');
   const isPropertyView = viewType === 'property';
   const isConstructionView = viewType === 'construction';
+  const subView = new URLSearchParams(location.search).get('view');
+  const isHistorySubView = subView === 'history';
 
   const assignmentService = useMemo(() => (
     user?.role === 'admin' ? adminService : managerService
@@ -135,6 +147,38 @@ const ManagerAssignments = () => {
         return bDate - aDate;
       }),
     [propertyHistory, activeStatus, activeDecision, activeAgent, scopedSearchTerm]
+  );
+  const propertyAgents = useMemo(
+    () => agents.filter((agent) => agent.agent_type === 'immobilier'),
+    [agents]
+  );
+  const propertyUnassignedCount = useMemo(
+    () => propertyRequests.filter((item) => !item.agent).length,
+    [propertyRequests]
+  );
+  const propertyConcludedCount = useMemo(
+    () => propertyHistory.filter((item) => decisionLabel(item.status) === 'Accepte').length,
+    [propertyHistory]
+  );
+  const constructionClientRequests = useMemo(
+    () => clientRequests.filter((item) => item.request_type === 'construction'),
+    [clientRequests]
+  );
+  const constructionClientHistory = useMemo(
+    () => clientHistory.filter((item) => item.request_type === 'construction'),
+    [clientHistory]
+  );
+  const constructionAgents = useMemo(
+    () => agents.filter((agent) => agent.agent_type === 'constructeur'),
+    [agents]
+  );
+  const constructionUnassignedCount = useMemo(
+    () => constructionClientRequests.filter((item) => !item.agent).length,
+    [constructionClientRequests]
+  );
+  const constructionConcludedCount = useMemo(
+    () => constructionClientHistory.filter((item) => decisionLabel(item.status) === 'Accepte').length,
+    [constructionClientHistory]
   );
   const scopedConstructionRequests = useMemo(
     () => filteredItems(constructionRequests, 'construction').filter((item) => {
@@ -373,6 +417,22 @@ const ManagerAssignments = () => {
     setActiveType('all');
   }, [location.search]);
 
+  // Revenir a la page 1 des qu'on entre dans la vue Propriete ou qu'on filtre.
+  useEffect(() => {
+    if (isPropertyView) {
+      setPropertyPage(1);
+      setPropertyHistoryPage(1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPropertyView]);
+
+  useEffect(() => {
+    if (isPropertyView) {
+      loadPropertyRequests();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPropertyView, propertyPage, propertyHistoryPage]);
+
   const loadAssignments = async () => {
     try {
       setLoading(true);
@@ -414,6 +474,38 @@ const ManagerAssignments = () => {
     }
   };
 
+  const loadPropertyRequests = async () => {
+    try {
+      const [pendingRes, historyRes] = await Promise.all([
+        assignmentService.getPendingPropertyRequests({ page: propertyPage }),
+        assignmentService.getPropertyRequestHistory({ page: propertyHistoryPage }),
+      ]);
+      const pendingPayload = extractPayload(pendingRes);
+      const historyPayload = extractPayload(historyRes);
+      const pendingList = pendingPayload.data || pendingPayload;
+      const historyList = historyPayload.data || historyPayload;
+
+      setPropertyRequests(Array.isArray(pendingList) ? pendingList : []);
+      setPropertyLastPage(pendingPayload.last_page || 1);
+      setPropertyTotal(pendingPayload.total ?? (Array.isArray(pendingList) ? pendingList.length : 0));
+
+      setPropertyHistory(Array.isArray(historyList) ? historyList : []);
+      setPropertyHistoryLastPage(historyPayload.last_page || 1);
+      setPropertyHistoryTotal(historyPayload.total ?? (Array.isArray(historyList) ? historyList.length : 0));
+    } catch (error) {
+      console.error('Erreur lors du chargement des demandes de propriete:', error);
+    }
+  };
+
+  // Rafraichit les donnees apres une action : le comportement d'origine partout,
+  // et en plus la pagination propriete quand on est sur cet onglet.
+  const refreshData = async () => {
+    await loadAssignments();
+    if (isPropertyView) {
+      await loadPropertyRequests();
+    }
+  };
+
   const handleAssign = async (type, uuid) => {
     const agentId = assignments[uuid];
     if (!agentId) {
@@ -438,7 +530,7 @@ const ManagerAssignments = () => {
         await assignmentService.assignPropertyRequest(uuid, { agent_id: agentId });
         setPropertyRequests((prev) => prev.filter((item) => item.uuid !== uuid));
       }
-      await loadAssignments();
+      await refreshData();
     } catch (error) {
       console.error('Erreur lors de l\'assignation:', error);
       alert('Erreur lors de l\'assignation');
@@ -448,7 +540,7 @@ const ManagerAssignments = () => {
   const handleApproveDomainClientRequest = async (uuid) => {
     try {
       await assignmentService.approveClientRequest(uuid);
-      await loadAssignments();
+      await refreshData();
     } catch (error) {
       console.error('Erreur lors de la decision:', error);
       alert('Erreur lors de la decision');
@@ -463,7 +555,7 @@ const ManagerAssignments = () => {
     }
     try {
       await assignmentService.assignClientRequest(uuid, { agent_id: agentId });
-      await loadAssignments();
+      await refreshData();
     } catch (error) {
       console.error('Erreur lors de l assignation:', error);
       alert(error.response?.data?.message || 'Erreur lors de l assignation');
@@ -500,7 +592,7 @@ const ManagerAssignments = () => {
           await assignmentService.approvePropertyRequest(item.uuid);
         }
       }
-      await loadAssignments();
+      await refreshData();
     } catch (error) {
       console.error('Erreur lors de la decision:', error);
       alert('Erreur lors de la decision');
@@ -524,7 +616,7 @@ const ManagerAssignments = () => {
       if (rejectModal.type === 'property') {
         await assignmentService.rejectPropertyRequest(rejectModal.item.uuid, { rejection_reason: reason || null });
       }
-      await loadAssignments();
+      await refreshData();
       setRejectModal({ open: false, type: null, item: null, reason: '' });
     } catch (error) {
       console.error('Erreur lors du rejet:', error);
@@ -599,7 +691,7 @@ const ManagerAssignments = () => {
             {agents
               .filter((agent) => {
                 const needed = requiredAgentType(type);
-                return !agent.agent_type || agent.agent_type === needed;
+                return agent.agent_type === needed;
               })
               .map((agent) => (
               <option key={agent.id} value={agent.id}>
@@ -720,183 +812,135 @@ const ManagerAssignments = () => {
       </div>
     );
   };
-  const renderPropertyRequestCard = (request) => (
-    <div key={request.uuid} className="overflow-hidden rounded-[28px] border border-[rgba(15,42,46,0.08)] bg-white shadow-[0_20px_45px_rgba(15,42,46,0.06)]">
-      <div className="border-b border-[rgba(15,42,46,0.06)] bg-[linear-gradient(135deg,rgba(15,42,46,0.06),rgba(199,109,74,0.10))] px-5 py-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center rounded-full bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[rgba(15,42,46,0.62)]">
-                Demande de propriete
-              </span>
-              <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${statusBadge(request.status)}`}>
+  const renderPropertyRequestCard = (request) => {
+    const isRejected = ['rejected', 'agent_rejected'].includes(request.status);
+    return (
+      <div key={request.uuid} className="surface-panel p-5">
+        <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+          <div className="h-11 w-11 shrink-0 rounded-2xl bg-[rgba(15,42,46,0.08)] flex items-center justify-center">
+            <Home className="h-5 w-5 text-[rgba(15,42,46,0.5)]" />
+          </div>
+          <div className="flex-1 min-w-0 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-base font-semibold text-[rgb(var(--ink))] truncate">
+                {request.user ? `${request.user.first_name} ${request.user.last_name}` : 'Proprietaire'}
+              </h3>
+              <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap ${statusBadge(request.status)}`}>
                 {decisionLabel(request.status)}
               </span>
             </div>
-            <h3 className="text-lg font-semibold text-[rgb(var(--ink))]">
-              {request.user ? `${request.user.first_name} ${request.user.last_name}` : 'Proprietaire'}
-            </h3>
-            <p className="text-sm text-[rgba(15,42,46,0.65)]">
+            <p className="text-sm text-[rgba(15,42,46,0.65)] line-clamp-2">
               {request.description || 'Demande de propriete'}
             </p>
-          </div>
-          <div className="rounded-2xl border border-white/60 bg-white/70 px-4 py-3 text-xs text-[rgba(15,42,46,0.62)]">
-            <p>Statut: <span className="font-semibold text-[rgb(var(--ink))]">{request.status || 'pending'}</span></p>
-            <p className="mt-1">Etat: <span className="font-semibold text-[rgb(var(--ink))]">{statusLabel(request.status)}</span></p>
-            <p className="mt-1">Agent: <span className="font-semibold text-[rgb(var(--ink))]">{request.agent ? `${request.agent.first_name} ${request.agent.last_name}` : 'Non assigne'}</span></p>
-          </div>
-        </div>
-      </div>
-
-      <div className="px-5 py-5">
-        <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-2xl bg-[rgba(15,42,46,0.04)] px-4 py-3">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-[rgba(15,42,46,0.45)]">Demandeur</p>
-            <p className="mt-2 text-sm font-medium text-[rgb(var(--ink))]">{formatRequester(request.user)}</p>
-          </div>
-          <div className="rounded-2xl bg-[rgba(15,42,46,0.04)] px-4 py-3">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-[rgba(15,42,46,0.45)]">Decision</p>
-            <p className="mt-2 text-sm font-medium text-[rgb(var(--ink))]">{decisionLabel(request.status)}</p>
-          </div>
-          <div className="rounded-2xl bg-[rgba(15,42,46,0.04)] px-4 py-3">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-[rgba(15,42,46,0.45)]">Derniere mise a jour</p>
-            <p className="mt-2 text-sm font-medium text-[rgb(var(--ink))]">
-              {getItemDate(request) ? new Date(getItemDate(request)).toLocaleString('fr-FR') : 'N/A'}
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_240px]">
-          <div className="rounded-2xl border border-[rgba(15,42,46,0.08)] bg-[rgba(255,253,250,0.8)] px-4 py-4">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-[rgba(15,42,46,0.45)]">Notes de la demande</p>
-            <p className="mt-3 text-sm leading-6 text-[rgba(15,42,46,0.72)]">
-              {request.description || 'Aucune precision complementaire fournie.'}
-            </p>
-            {['rejected', 'agent_rejected'].includes(request.status) && request.rejection_reason && (
-              <div className="mt-4 rounded-2xl border border-[rgba(199,109,74,0.18)] bg-[rgba(199,109,74,0.08)] px-4 py-3">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-[rgba(15,42,46,0.45)]">
-                  {request.status === 'agent_rejected' ? 'Refus agent' : 'Rejet'}
-                </p>
-                <p className="mt-2 text-sm font-medium text-[rgb(var(--ink))]">
-                  {request.status === 'agent_rejected'
-                    ? "Un agent assigne a refuse cette demande."
-                    : 'Cette demande a ete rejetee.'}
-                </p>
-                <button
-                  type="button"
-                  className="mt-3 btn-ghost text-[rgb(var(--clay))]"
-                  onClick={() => setHistoryModal({
-                    open: true,
-                    item: request,
-                    title: rejectionModalTitle(request, 'Motif de rejet - Propriete'),
-                  })}
-                >
-                  {request.status === 'agent_rejected' ? 'Voir le motif du refus agent' : 'Voir le motif'}
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-2xl border border-[rgba(15,42,46,0.08)] bg-[rgba(15,42,46,0.02)] px-4 py-4">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-[rgba(15,42,46,0.45)]">Actions</p>
-            {canDecide(request, 'property') && (
-              <div className="mt-4 flex flex-col gap-2">
-                <button onClick={() => handleDecision('property', request, 'approve')} className="btn-primary w-full justify-center">
-                  <CheckCircle className="h-4 w-4" />
-                  Approuver
-                </button>
-                <button onClick={() => handleDecision('property', request, 'reject')} className="btn-ghost w-full justify-center">
-                  <XCircle className="h-4 w-4" />
-                  Rejeter
-                </button>
-              </div>
-            )}
-
-            <div className="mt-4 space-y-2">
-              <select
-                value={assignments[request.uuid] || ''}
-                onChange={(e) => setAssignments((prev) => ({ ...prev, [request.uuid]: e.target.value }))}
-                className="w-full rounded-xl border border-[rgb(var(--line))] bg-white px-3 py-2 text-sm"
-              >
-                <option value="">Selectionner un agent</option>
-                {agents
-                  .filter((agent) => !agent.agent_type || agent.agent_type === 'immobilier')
-                  .map((agent) => (
-                    <option key={agent.id} value={agent.id}>
-                      {agent.first_name} {agent.last_name} {agent.agent_type ? `(${agent.agent_type})` : ''}
-                    </option>
-                  ))}
-              </select>
-              <button
-                onClick={() => handleAssign('property', request.uuid)}
-                className="btn-primary w-full justify-center"
-                disabled={request.status !== 'approved'}
-              >
-                <UserCheck className="h-4 w-4" />
-                Assigner
-              </button>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[rgba(15,42,46,0.55)]">
+              <span>{formatRequester(request.user)}</span>
+              <span>Agent : {request.agent ? `${request.agent.first_name} ${request.agent.last_name}` : 'Non assigne'}</span>
+              <span>{getItemDate(request) ? new Date(getItemDate(request)).toLocaleDateString('fr-FR') : 'N/A'}</span>
             </div>
           </div>
         </div>
-      </div>
-    </div>
-  );
-  const renderPropertyHistoryCard = (request) => (
-    <div key={request.uuid} className="rounded-[24px] border border-[rgba(15,42,46,0.08)] bg-white px-5 py-4 shadow-[0_16px_36px_rgba(15,42,46,0.05)]">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-semibold text-[rgb(var(--ink))]">
-              {request.user ? `${request.user.first_name} ${request.user.last_name}` : 'Proprietaire'}
+
+        {isRejected && request.rejection_reason && (
+          <div className="mt-4 rounded-xl border border-[rgba(199,109,74,0.18)] bg-[rgba(199,109,74,0.06)] px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-[rgb(var(--clay))] font-medium">
+              {request.status === 'agent_rejected' ? "Refusee par l'agent assigne." : 'Cette demande a ete rejetee.'}
             </p>
-          <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${statusBadge(request.status)}`}>
-              {statusLabel(request.status)}
-          </span>
+            <button
+              type="button"
+              className="text-xs font-semibold text-[rgb(var(--clay))] underline underline-offset-2 shrink-0"
+              onClick={() => setHistoryModal({
+                open: true,
+                item: request,
+                title: rejectionModalTitle(request, 'Motif de rejet - Propriete'),
+              })}
+            >
+              Voir le motif
+            </button>
           </div>
-          <p className="text-sm leading-6 text-[rgba(15,42,46,0.68)]">
-            {request.description?.slice(0, 140) || 'Demande de propriete'}
-          </p>
-          <p className="text-xs text-[rgba(15,42,46,0.5)]">
-            Decision: {decisionLabel(request.status)} | Agent: {request.agent ? `${request.agent.first_name} ${request.agent.last_name}` : 'Non assigne'}
-          </p>
-        </div>
-        <div className="text-xs text-[rgba(15,42,46,0.48)]">
-          {getItemDate(request) ? new Date(getItemDate(request)).toLocaleString('fr-FR') : 'N/A'}
+        )}
+
+        <div className="mt-4 pt-4 border-t border-[rgba(15,42,46,0.08)] flex flex-col sm:flex-row sm:items-center gap-3">
+          {canDecide(request, 'property') && (
+            <div className="flex gap-2">
+              <button onClick={() => handleDecision('property', request, 'approve')} className="btn-primary">
+                <CheckCircle className="h-4 w-4" />
+                Approuver
+              </button>
+              <button onClick={() => handleDecision('property', request, 'reject')} className="btn-ghost">
+                <XCircle className="h-4 w-4" />
+                Rejeter
+              </button>
+            </div>
+          )}
+          <div className="flex-1 flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-end">
+            <select
+              value={assignments[request.uuid] || ''}
+              onChange={(e) => setAssignments((prev) => ({ ...prev, [request.uuid]: e.target.value }))}
+              className="rounded-xl border border-[rgb(var(--line))] bg-white px-3 py-2 text-sm sm:w-56"
+            >
+              <option value="">Selectionner un agent</option>
+              {propertyAgents.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agent.first_name} {agent.last_name}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() => handleAssign('property', request.uuid)}
+              className="btn-primary shrink-0"
+              disabled={request.status !== 'approved'}
+            >
+              <UserCheck className="h-4 w-4" />
+              Assigner
+            </button>
+          </div>
         </div>
       </div>
-      <div className="mt-4 grid gap-3 md:grid-cols-3">
-        <div className="rounded-2xl bg-[rgba(15,42,46,0.04)] px-4 py-3">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-[rgba(15,42,46,0.42)]">Decision</p>
-          <p className="mt-2 text-sm font-semibold text-[rgb(var(--ink))]">{decisionLabel(request.status)}</p>
+    );
+  };
+  const renderPropertyHistoryCard = (request) => {
+    const isRejected = ['rejected', 'agent_rejected'].includes(request.status);
+    return (
+      <div key={request.uuid} className="surface-soft px-4 py-4">
+        <div className="flex items-start gap-3">
+          <div className="h-9 w-9 shrink-0 rounded-xl bg-[rgba(15,42,46,0.06)] flex items-center justify-center">
+            <Home className="h-4 w-4 text-[rgba(15,42,46,0.45)]" />
+          </div>
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-[rgb(var(--ink))] truncate">
+                {request.user ? `${request.user.first_name} ${request.user.last_name}` : 'Proprietaire'}
+              </p>
+              <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap ${statusBadge(request.status)}`}>
+                {statusLabel(request.status)}
+              </span>
+            </div>
+            <p className="text-sm text-[rgba(15,42,46,0.65)] line-clamp-1">
+              {request.description?.slice(0, 140) || 'Demande de propriete'}
+            </p>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[rgba(15,42,46,0.5)]">
+              <span>Decision : {decisionLabel(request.status)}</span>
+              <span>Agent : {request.agent ? `${request.agent.first_name} ${request.agent.last_name}` : 'Non assigne'}</span>
+              <span>{getItemDate(request) ? new Date(getItemDate(request)).toLocaleDateString('fr-FR') : 'N/A'}</span>
+            </div>
+          </div>
         </div>
-        <div className="rounded-2xl bg-[rgba(15,42,46,0.04)] px-4 py-3">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-[rgba(15,42,46,0.42)]">Agent</p>
-          <p className="mt-2 text-sm font-semibold text-[rgb(var(--ink))]">
-            {request.agent ? `${request.agent.first_name} ${request.agent.last_name}` : 'Non assigne'}
-          </p>
-        </div>
-        <div className="rounded-2xl bg-[rgba(15,42,46,0.04)] px-4 py-3">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-[rgba(15,42,46,0.42)]">Date</p>
-          <p className="mt-2 text-sm font-semibold text-[rgb(var(--ink))]">
-            {getItemDate(request) ? new Date(getItemDate(request)).toLocaleString('fr-FR') : 'N/A'}
-          </p>
-        </div>
+        {isRejected && request.rejection_reason && (
+          <button
+            type="button"
+            className="mt-3 text-xs font-semibold text-[rgb(var(--clay))] underline underline-offset-2"
+            onClick={() => setHistoryModal({
+              open: true,
+              item: request,
+              title: rejectionModalTitle(request, 'Motif de rejet - Propriete'),
+            })}
+          >
+            {request.status === 'agent_rejected' ? 'Voir le motif du refus agent' : 'Voir le motif'}
+          </button>
+        )}
       </div>
-      {['rejected', 'agent_rejected'].includes(request.status) && request.rejection_reason && (
-        <button
-          type="button"
-          className="mt-3 btn-ghost text-[rgb(var(--clay))]"
-          onClick={() => setHistoryModal({
-            open: true,
-            item: request,
-            title: rejectionModalTitle(request, 'Motif de rejet - Propriete'),
-          })}
-        >
-          {request.status === 'agent_rejected' ? 'Voir le motif du refus agent' : 'Voir le motif'}
-        </button>
-      )}
-    </div>
-  );
+    );
+  };
   const renderPropertyFeedCard = (entry) => (
     <div key={`${entry.type}-${entry.uuid}`} className="relative rounded-[24px] border border-[rgba(15,42,46,0.08)] bg-white px-5 py-4 shadow-[0_16px_36px_rgba(15,42,46,0.05)]">
       <div className="absolute left-0 top-6 h-10 w-1 rounded-r-full bg-[rgb(var(--clay))]" />
@@ -949,25 +993,91 @@ const ManagerAssignments = () => {
       <Sidebar />
       <div className="flex-1 flex flex-col">
         <Header />
-        <main className="flex-1 px-6 py-8">
+        <main className="flex-1 px-4 sm:px-6 py-6 sm:py-8">
           <div className="max-w-7xl mx-auto space-y-6">
             <div>
               <p className="chip">{roleLabel}</p>
-              <h1 className="text-3xl font-semibold mt-3">
-                {isPropertyView ? 'Demandes de propriete' : isConstructionView ? 'Demandes de construction' : 'Assignations'}
+              <h1 className="text-2xl sm:text-3xl font-semibold mt-3 text-[rgb(var(--ink))]">
+                {isPropertyView
+                  ? (isHistorySubView ? 'Historique des demandes proprietaires' : 'Demandes de propriete')
+                  : isConstructionView
+                    ? (isHistorySubView ? 'Historique des demandes de construction' : 'Demandes de construction')
+                    : 'Assignations'}
               </h1>
               <p className="text-sm text-[rgba(15,42,46,0.6)] mt-2">
                 {isPropertyView
-                  ? 'Consultez uniquement les demandes de propriete, leur historique et le journal recent associe.'
+                  ? (isHistorySubView
+                    ? 'Consultez l historique des demandes proprietaires et leur conclusion.'
+                    : 'Traitez les demandes des proprietaires, assignez un agent et suivez l historique.')
                   : isConstructionView
-                    ? 'Consultez uniquement les demandes de construction et leur historique associe.'
+                    ? (isHistorySubView
+                      ? 'Consultez l historique des demandes de construction et leur conclusion.'
+                      : 'Traitez les demandes de projet de construction, assignez un agent constructeur et suivez l historique.')
                   : 'Distribuez les demandes de recherche, construction et propriete.'}
               </p>
             </div>
 
-            <div className="surface-panel p-5 space-y-4">
-              <div className={`grid grid-cols-1 ${isPropertyView || isConstructionView ? 'md:grid-cols-3' : 'md:grid-cols-2 lg:grid-cols-4'} gap-3`}>
-                {!isPropertyView && !isConstructionView && (
+            {isPropertyView && (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                {[
+                  { key: 'pending', label: 'En attente', value: propertyTotal, icon: Clock, highlight: propertyTotal > 0 },
+                  { key: 'unassigned', label: 'Non assignees', value: propertyUnassignedCount, icon: UserCheck, highlight: propertyUnassignedCount > 0 },
+                  { key: 'concluded', label: 'Traitees', value: propertyConcludedCount, icon: CheckCircle },
+                  { key: 'agents', label: 'Agents immobiliers', value: propertyAgents.length, icon: UserCog },
+                ].map((kpi) => (
+                  <div key={kpi.key} className="surface-card p-4 sm:p-5 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-xs sm:text-sm text-[rgba(15,42,46,0.6)] truncate">{kpi.label}</p>
+                        <p className="text-2xl sm:text-3xl font-semibold mt-1.5 text-[rgb(var(--ink))]">
+                          {loading ? '...' : Number(kpi.value || 0).toLocaleString()}
+                        </p>
+                      </div>
+                      <div
+                        className={`h-9 w-9 sm:h-11 sm:w-11 shrink-0 rounded-2xl flex items-center justify-center ${
+                          kpi.highlight ? 'bg-[rgb(var(--clay))] text-white' : 'bg-[rgba(15,42,46,0.08)] text-[rgb(var(--ink))]'
+                        }`}
+                      >
+                        <kpi.icon className="h-4 w-4 sm:h-5 sm:w-5" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {isConstructionView && (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                {[
+                  { key: 'pending', label: 'En attente', value: constructionClientRequests.length, icon: Clock, highlight: constructionClientRequests.length > 0 },
+                  { key: 'unassigned', label: 'Non assignees', value: constructionUnassignedCount, icon: UserCheck, highlight: constructionUnassignedCount > 0 },
+                  { key: 'concluded', label: 'Traitees', value: constructionConcludedCount, icon: CheckCircle },
+                  { key: 'agents', label: 'Agents constructeurs', value: constructionAgents.length, icon: HardHat },
+                ].map((kpi) => (
+                  <div key={kpi.key} className="surface-card p-4 sm:p-5 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-xs sm:text-sm text-[rgba(15,42,46,0.6)] truncate">{kpi.label}</p>
+                        <p className="text-2xl sm:text-3xl font-semibold mt-1.5 text-[rgb(var(--ink))]">
+                          {loading ? '...' : Number(kpi.value || 0).toLocaleString()}
+                        </p>
+                      </div>
+                      <div
+                        className={`h-9 w-9 sm:h-11 sm:w-11 shrink-0 rounded-2xl flex items-center justify-center ${
+                          kpi.highlight ? 'bg-[rgb(var(--clay))] text-white' : 'bg-[rgba(15,42,46,0.08)] text-[rgb(var(--ink))]'
+                        }`}
+                      >
+                        <kpi.icon className="h-4 w-4 sm:h-5 sm:w-5" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!isPropertyView && !isConstructionView && (
+              <div className="surface-panel p-5 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                   <select
                     value={activeType}
                     onChange={(e) => setActiveType(e.target.value)}
@@ -978,11 +1088,57 @@ const ManagerAssignments = () => {
                     <option value="construction">Construction</option>
                     <option value="property">Propriete</option>
                   </select>
-                )}
+                  <select
+                    value={activeStatus}
+                    onChange={(e) => setActiveStatus(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-[rgb(var(--line))] bg-white/70 text-sm"
+                  >
+                    <option value="all">Tous statuts</option>
+                    <option value="pending">En attente</option>
+                    <option value="approved">Approuve</option>
+                    <option value="rejected">Rejete</option>
+                    <option value="assigned">Assigne</option>
+                  </select>
+                  <select
+                    value={activeDecision}
+                    onChange={(e) => setActiveDecision(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-[rgb(var(--line))] bg-white/70 text-sm"
+                  >
+                    <option value="all">Toutes decisions</option>
+                    <option value="Accepte">Accepte</option>
+                    <option value="Refuse">Refuse</option>
+                    <option value="En cours">En cours</option>
+                    <option value="En attente">En attente</option>
+                  </select>
+                  <select
+                    value={activeAgent}
+                    onChange={(e) => setActiveAgent(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-[rgb(var(--line))] bg-white/70 text-sm"
+                  >
+                    <option value="all">Tous agents</option>
+                    <option value="assigned">Assigne</option>
+                    <option value="unassigned">Non assigne</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {isConstructionView && (
+              <div className="surface-panel p-4 sm:p-5 flex flex-col md:flex-row gap-3 md:items-center">
+                <div className="relative flex-1 min-w-0">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[rgba(15,42,46,0.5)]" />
+                  <input
+                    type="text"
+                    placeholder="Rechercher par nom, description, statut..."
+                    value={scopedSearchTerm}
+                    onChange={(e) => setScopedSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[rgb(var(--line))] bg-white/70 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
+                  />
+                </div>
                 <select
                   value={activeStatus}
                   onChange={(e) => setActiveStatus(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-[rgb(var(--line))] bg-white/70 text-sm"
+                  className="px-4 py-2.5 rounded-xl border border-[rgb(var(--line))] bg-white/70 text-sm shrink-0"
                 >
                   <option value="all">Tous statuts</option>
                   <option value="pending">En attente</option>
@@ -993,7 +1149,7 @@ const ManagerAssignments = () => {
                 <select
                   value={activeDecision}
                   onChange={(e) => setActiveDecision(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-[rgb(var(--line))] bg-white/70 text-sm"
+                  className="px-4 py-2.5 rounded-xl border border-[rgb(var(--line))] bg-white/70 text-sm shrink-0"
                 >
                   <option value="all">Toutes decisions</option>
                   <option value="Accepte">Accepte</option>
@@ -1004,27 +1160,78 @@ const ManagerAssignments = () => {
                 <select
                   value={activeAgent}
                   onChange={(e) => setActiveAgent(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-[rgb(var(--line))] bg-white/70 text-sm"
+                  className="px-4 py-2.5 rounded-xl border border-[rgb(var(--line))] bg-white/70 text-sm shrink-0"
                 >
                   <option value="all">Tous agents</option>
                   <option value="assigned">Assigne</option>
                   <option value="unassigned">Non assigne</option>
                 </select>
+                {(scopedSearchTerm || activeStatus !== 'all' || activeDecision !== 'all' || activeAgent !== 'all') && (
+                  <button
+                    type="button"
+                    onClick={() => { setScopedSearchTerm(''); setActiveStatus('all'); setActiveDecision('all'); setActiveAgent('all'); }}
+                    className="btn-ghost shrink-0 text-xs"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Reinitialiser
+                  </button>
+                )}
               </div>
-            </div>
+            )}
 
-            {(isPropertyView || isConstructionView) && (
-              <div className="surface-panel p-5">
-                <div className="relative w-full">
+            {isPropertyView && (
+              <div className="surface-panel p-4 sm:p-5 flex flex-col md:flex-row gap-3 md:items-center">
+                <div className="relative flex-1 min-w-0">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[rgba(15,42,46,0.5)]" />
                   <input
                     type="text"
-                    placeholder={isPropertyView ? 'Rechercher une demande de propriete...' : 'Rechercher une demande de construction...'}
+                    placeholder="Rechercher par nom, description, statut..."
                     value={scopedSearchTerm}
                     onChange={(e) => setScopedSearchTerm(e.target.value)}
-                    className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 py-3 pl-10 pr-4 text-sm"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[rgb(var(--line))] bg-white/70 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
                   />
                 </div>
+                <select
+                  value={activeStatus}
+                  onChange={(e) => setActiveStatus(e.target.value)}
+                  className="px-4 py-2.5 rounded-xl border border-[rgb(var(--line))] bg-white/70 text-sm shrink-0"
+                >
+                  <option value="all">Tous statuts</option>
+                  <option value="pending">En attente</option>
+                  <option value="approved">Approuve</option>
+                  <option value="rejected">Rejete</option>
+                  <option value="assigned">Assigne</option>
+                </select>
+                <select
+                  value={activeDecision}
+                  onChange={(e) => setActiveDecision(e.target.value)}
+                  className="px-4 py-2.5 rounded-xl border border-[rgb(var(--line))] bg-white/70 text-sm shrink-0"
+                >
+                  <option value="all">Toutes decisions</option>
+                  <option value="Accepte">Accepte</option>
+                  <option value="Refuse">Refuse</option>
+                  <option value="En cours">En cours</option>
+                  <option value="En attente">En attente</option>
+                </select>
+                <select
+                  value={activeAgent}
+                  onChange={(e) => setActiveAgent(e.target.value)}
+                  className="px-4 py-2.5 rounded-xl border border-[rgb(var(--line))] bg-white/70 text-sm shrink-0"
+                >
+                  <option value="all">Tous agents</option>
+                  <option value="assigned">Assigne</option>
+                  <option value="unassigned">Non assigne</option>
+                </select>
+                {(scopedSearchTerm || activeStatus !== 'all' || activeDecision !== 'all' || activeAgent !== 'all') && (
+                  <button
+                    type="button"
+                    onClick={() => { setScopedSearchTerm(''); setActiveStatus('all'); setActiveDecision('all'); setActiveAgent('all'); }}
+                    className="btn-ghost shrink-0 text-xs"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Reinitialiser
+                  </button>
+                )}
               </div>
             )}
 
@@ -1083,8 +1290,8 @@ const ManagerAssignments = () => {
                   <div className="xl:col-span-2 space-y-6">
                     <ClientRequestDomainSections
                       requestType="construction"
-                      requests={scopedConstructionClientRequests}
-                      history={scopedConstructionClientHistory}
+                      requests={isHistorySubView ? [] : scopedConstructionClientRequests}
+                      history={isHistorySubView ? scopedConstructionClientHistory : []}
                       agents={agents}
                       assignments={assignments}
                       setAssignments={setAssignments}
@@ -1093,9 +1300,9 @@ const ManagerAssignments = () => {
                       onOpenReject={openDomainClientRejectModal}
                       onAssign={handleAssignDomainClientRequest}
                       onOpenHistoryReason={(item) => setHistoryModal({ open: true, item, title: rejectionModalTitle(item, 'Motif de rejet - Construction') })}
-                      pendingTitle="Demandes de construction"
+                      pendingTitle={isHistorySubView ? undefined : 'Demandes de construction'}
                       pendingDescription="Traitez d'abord les demandes de projet de construction envoyees depuis le site public, puis consultez leur historique."
-                      historyTitle="Historique construction"
+                      historyTitle={isHistorySubView ? 'Historique des demandes de construction' : undefined}
                       emptyPendingLabel="Aucune demande en attente."
                       emptyHistoryLabel="Aucun historique."
                     />
@@ -1107,16 +1314,24 @@ const ManagerAssignments = () => {
               <div className={`${isPropertyView ? 'xl:col-span-2' : ''} ${isPropertyView ? 'space-y-6' : 'surface-panel p-6 space-y-4'}`}>
                 {isPropertyView ? (
                   <>
+                    {!isHistorySubView && (
                     <div className="surface-panel p-6 space-y-4">
-                      <div className="flex items-center gap-2">
-                        <Home className="h-5 w-5" />
-                        <h2 className="text-lg font-semibold">Demandes des proprietaires</h2>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <Home className="h-5 w-5 text-[rgba(15,42,46,0.6)]" />
+                          <h2 className="text-lg font-semibold">Demandes des proprietaires</h2>
+                        </div>
+                        {propertyTotal > 0 && <span className="chip shrink-0">{propertyTotal} en attente</span>}
                       </div>
                       <p className="text-sm text-[rgba(15,42,46,0.6)]">
                         Retrouvez ici les demandes envoyees par les proprietaires pour la creation de leurs biens.
                       </p>
                       {loading ? (
-                        <p className="text-sm text-[rgba(15,42,46,0.5)]">Chargement...</p>
+                        <div className="space-y-3">
+                          {Array.from({ length: 3 }).map((_, i) => (
+                            <div key={i} className="h-24 rounded-xl bg-[rgba(15,42,46,0.05)] animate-pulse" />
+                          ))}
+                        </div>
                       ) : scopedPropertyRequests.length === 0 ? (
                         <p className="text-sm text-[rgba(15,42,46,0.5)]">Aucune demande proprietaire en attente.</p>
                       ) : (
@@ -1124,15 +1339,47 @@ const ManagerAssignments = () => {
                           {scopedPropertyRequests.map((request) => renderPropertyRequestCard(request))}
                         </div>
                       )}
+                      {!loading && propertyTotal > 0 && (
+                        <div className="flex items-center justify-between gap-3 pt-2 border-t border-[rgba(15,42,46,0.08)]">
+                          <p className="text-xs text-[rgba(15,42,46,0.55)]">
+                            {propertyTotal} demande{propertyTotal > 1 ? 's' : ''} - page {propertyPage} sur {propertyLastPage}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setPropertyPage((p) => Math.max(1, p - 1))}
+                              disabled={propertyPage <= 1}
+                              className="h-8 w-8 rounded-lg border border-[rgb(var(--line))] flex items-center justify-center text-[rgba(15,42,46,0.6)] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white transition"
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => setPropertyPage((p) => Math.min(propertyLastPage, p + 1))}
+                              disabled={propertyPage >= propertyLastPage}
+                              className="h-8 w-8 rounded-lg border border-[rgb(var(--line))] flex items-center justify-center text-[rgba(15,42,46,0.6)] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white transition"
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
+                    )}
 
+                    {isHistorySubView && (
                     <div className="surface-panel p-6 space-y-4">
-                      <div className="flex items-center gap-2">
-                        <Home className="h-5 w-5" />
-                        <h2 className="text-lg font-semibold">Historique des demandes proprietaires</h2>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <Home className="h-5 w-5 text-[rgba(15,42,46,0.6)]" />
+                          <h2 className="text-lg font-semibold">Historique des demandes proprietaires</h2>
+                        </div>
+                        {propertyHistoryTotal > 0 && <span className="chip shrink-0">{propertyHistoryTotal} dossier{propertyHistoryTotal > 1 ? 's' : ''}</span>}
                       </div>
                       {loading ? (
-                        <p className="text-sm text-[rgba(15,42,46,0.5)]">Chargement...</p>
+                        <div className="space-y-3">
+                          {Array.from({ length: 3 }).map((_, i) => (
+                            <div key={i} className="h-16 rounded-xl bg-[rgba(15,42,46,0.05)] animate-pulse" />
+                          ))}
+                        </div>
                       ) : scopedPropertyHistory.length === 0 ? (
                         <p className="text-sm text-[rgba(15,42,46,0.5)]">Aucun historique proprietaire.</p>
                       ) : (
@@ -1140,7 +1387,31 @@ const ManagerAssignments = () => {
                           {scopedPropertyHistory.map((request) => renderPropertyHistoryCard(request))}
                         </div>
                       )}
+                      {!loading && propertyHistoryTotal > 0 && (
+                        <div className="flex items-center justify-between gap-3 pt-2 border-t border-[rgba(15,42,46,0.08)]">
+                          <p className="text-xs text-[rgba(15,42,46,0.55)]">
+                            {propertyHistoryTotal} dossier{propertyHistoryTotal > 1 ? 's' : ''} - page {propertyHistoryPage} sur {propertyHistoryLastPage}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setPropertyHistoryPage((p) => Math.max(1, p - 1))}
+                              disabled={propertyHistoryPage <= 1}
+                              className="h-8 w-8 rounded-lg border border-[rgb(var(--line))] flex items-center justify-center text-[rgba(15,42,46,0.6)] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white transition"
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => setPropertyHistoryPage((p) => Math.min(propertyHistoryLastPage, p + 1))}
+                              disabled={propertyHistoryPage >= propertyHistoryLastPage}
+                              className="h-8 w-8 rounded-lg border border-[rgb(var(--line))] flex items-center justify-center text-[rgba(15,42,46,0.6)] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white transition"
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
+                    )}
                   </>
                 ) : (
                   <>

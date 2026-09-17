@@ -70,7 +70,12 @@ const DashboardManager = () => {
         const clientHistory = extractList(clientHistoryRes);
         const searchPending = extractList(searchPendingRes);
         const searchHistory = extractList(searchHistoryRes);
-        const reports = extractList(reportsRes);
+        // Le rapport gestionnaire renvoie un objet agrégé (compteurs + liste
+        // `recent_assignments`), pas une liste brute — on l'extrait tel quel.
+        const reportsPayload = extractPayload(reportsRes) || {};
+        const reports = Array.isArray(reportsPayload.recent_assignments)
+          ? reportsPayload.recent_assignments
+          : [];
 
         const propertyClientPending = clientPending.filter((item) => (item.request_type || 'immobilier') === 'immobilier');
         const propertyClientHistory = clientHistory.filter((item) => (item.request_type || 'immobilier') === 'immobilier');
@@ -122,7 +127,13 @@ const DashboardManager = () => {
         ]);
 
         setSearchRequests(searchPending.slice(0, 5));
-        setReportHighlights(reports.slice(0, 5));
+        setReportHighlights(
+          reports.slice(0, 5).map((item) => ({
+            title: item.title,
+            description: item.subtitle,
+            type: item.type,
+          }))
+        );
         setRecentAlerts([
           {
             label: 'Demandes propriete a traiter',
@@ -238,7 +249,10 @@ const DashboardManager = () => {
                     </p>
                   </div>
                   <div className="surface-soft px-4 py-3 flex items-center gap-3">
-                    <span className="h-2.5 w-2.5 rounded-full bg-[rgb(var(--sage))]" />
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                    </span>
                     <span className="text-xs font-medium text-[rgba(15,42,46,0.7)]">
                       Espace gestionnaire actif
                     </span>

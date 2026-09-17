@@ -20,10 +20,33 @@ const InvestorPortfolio = () => {
     try {
       setLoading(true);
       setError('');
-      const response = await investorService.getMyProposals();
-      const payload = extractPayload(response);
-      const list = payload.data || payload;
-      setProposals(Array.isArray(list) ? list : []);
+      const [proposalsRes, clientRequestsRes] = await Promise.all([
+        investorService.getMyProposals(),
+        investorService.getMyClientRequests(),
+      ]);
+
+      const proposalsPayload = extractPayload(proposalsRes);
+      const proposalsList = proposalsPayload.data || proposalsPayload;
+      const normalizedProposals = (Array.isArray(proposalsList) ? proposalsList : []).map((proposal) => ({
+        uuid: proposal.uuid || proposal.id,
+        title: proposal.investment_project?.title || proposal.investmentProject?.title || 'Projet investissement',
+        amount: Number(proposal.amount) || 0,
+        approved: proposal.status === 'approved',
+      }));
+
+      // Demandes envoyees via le formulaire public "etre recontacte", conclues cote back-office.
+      const clientRequestsPayload = extractPayload(clientRequestsRes);
+      const clientRequestsList = clientRequestsPayload.data || clientRequestsPayload;
+      const normalizedClientRequests = (Array.isArray(clientRequestsList) ? clientRequestsList : [])
+        .filter((item) => item.deal_status === 'deal_concluded' || item.status === 'deal_concluded')
+        .map((item) => ({
+          uuid: item.uuid || item.id,
+          title: item.investment_project?.title || item.investmentProject?.title || 'Projet investissement',
+          amount: Number(item.deal_sale_price) || 0,
+          approved: true,
+        }));
+
+      setProposals([...normalizedProposals, ...normalizedClientRequests]);
     } catch (err) {
       console.error('Erreur chargement portefeuille:', err);
       setError(err.response?.data?.message || 'Impossible de charger le portefeuille.');
@@ -33,7 +56,7 @@ const InvestorPortfolio = () => {
   };
 
   const approved = useMemo(
-    () => proposals.filter((proposal) => proposal.status === 'approved'),
+    () => proposals.filter((proposal) => proposal.approved),
     [proposals]
   );
 
@@ -82,7 +105,7 @@ const InvestorPortfolio = () => {
                   <div key={proposal.uuid || proposal.id} className="surface-panel p-6 flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium">
-                        {proposal.investment_project?.title || 'Projet investissement'}
+                        {proposal.title}
                       </p>
                       <p className="text-xs text-[rgba(15,42,46,0.5)]">
                         Montant: {formatFcfa(proposal.amount)}

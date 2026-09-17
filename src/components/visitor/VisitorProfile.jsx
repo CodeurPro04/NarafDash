@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import Header from '../common/Header';
-import { visitorService } from '../../services/api';
+import { visitorService, propertyTypeService } from '../../services/api';
 import { FileText, HardHat, Mail, Send } from 'lucide-react';
 
 const VisitorProfile = () => {
@@ -11,12 +11,16 @@ const VisitorProfile = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchForm, setSearchForm] = useState({
-    title: '',
-    description: '',
+    transaction_type: 'location',
+    property_type_id: '',
     budget_min: '',
     budget_max: '',
-    city: '',
+    bedrooms_min: '',
+    surface_min: '',
+    location_preferences: '',
+    additional_requirements: '',
   });
+  const [propertyTypes, setPropertyTypes] = useState([]);
   const [constructionForm, setConstructionForm] = useState({
     title: '',
     description: '',
@@ -35,6 +39,9 @@ const VisitorProfile = () => {
 
   useEffect(() => {
     loadData();
+    propertyTypeService.getAll()
+      .then((response) => setPropertyTypes(extractPayload(response)))
+      .catch((err) => console.error('Erreur chargement types de bien:', err));
   }, []);
 
   const loadData = async () => {
@@ -72,15 +79,35 @@ const VisitorProfile = () => {
   };
 
   const submitSearch = async () => {
-    if (!searchForm.description) {
-      setError('Veuillez renseigner la description de recherche.');
+    if (!searchForm.transaction_type) {
+      setError('Veuillez préciser le type de transaction recherché.');
       return;
     }
     try {
       setSavingSearch(true);
       setError('');
-      await visitorService.createSearchRequest(searchForm);
-      setSearchForm({ title: '', description: '', budget_min: '', budget_max: '', city: '' });
+      await visitorService.createSearchRequest({
+        transaction_type: searchForm.transaction_type,
+        property_type_id: searchForm.property_type_id || null,
+        budget_min: searchForm.budget_min || null,
+        budget_max: searchForm.budget_max || null,
+        bedrooms_min: searchForm.bedrooms_min || null,
+        surface_min: searchForm.surface_min || null,
+        location_preferences: searchForm.location_preferences
+          ? [searchForm.location_preferences]
+          : null,
+        additional_requirements: searchForm.additional_requirements || null,
+      });
+      setSearchForm({
+        transaction_type: 'location',
+        property_type_id: '',
+        budget_min: '',
+        budget_max: '',
+        bedrooms_min: '',
+        surface_min: '',
+        location_preferences: '',
+        additional_requirements: '',
+      });
       await loadData();
     } catch (err) {
       console.error('Erreur creation recherche:', err);
@@ -176,18 +203,32 @@ const VisitorProfile = () => {
                   <h2 className="text-lg font-semibold">Demandes de recherche</h2>
                 </div>
                 <div className="space-y-2">
-                  <input
-                    type="text"
-                    name="title"
-                    placeholder="Titre"
-                    value={searchForm.title}
-                    onChange={handleSearchChange}
-                    className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-2 text-sm"
-                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
+                      name="transaction_type"
+                      value={searchForm.transaction_type}
+                      onChange={handleSearchChange}
+                      className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-2 text-sm"
+                    >
+                      <option value="location">Location</option>
+                      <option value="vente">Vente</option>
+                    </select>
+                    <select
+                      name="property_type_id"
+                      value={searchForm.property_type_id}
+                      onChange={handleSearchChange}
+                      className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-2 text-sm"
+                    >
+                      <option value="">Type de bien</option>
+                      {propertyTypes.map((type) => (
+                        <option key={type.id} value={type.id}>{type.name}</option>
+                      ))}
+                    </select>
+                  </div>
                   <textarea
-                    name="description"
-                    placeholder="Description"
-                    value={searchForm.description}
+                    name="additional_requirements"
+                    placeholder="Décrivez ce que vous recherchez"
+                    value={searchForm.additional_requirements}
                     onChange={handleSearchChange}
                     rows={4}
                     className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-2 text-sm"
@@ -210,11 +251,29 @@ const VisitorProfile = () => {
                       className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-2 text-sm"
                     />
                   </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="number"
+                      name="bedrooms_min"
+                      placeholder="Chambres min"
+                      value={searchForm.bedrooms_min}
+                      onChange={handleSearchChange}
+                      className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-2 text-sm"
+                    />
+                    <input
+                      type="number"
+                      name="surface_min"
+                      placeholder="Surface min (m²)"
+                      value={searchForm.surface_min}
+                      onChange={handleSearchChange}
+                      className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-2 text-sm"
+                    />
+                  </div>
                   <input
                     type="text"
-                    name="city"
-                    placeholder="Ville"
-                    value={searchForm.city}
+                    name="location_preferences"
+                    placeholder="Ville / quartier souhaité"
+                    value={searchForm.location_preferences}
                     onChange={handleSearchChange}
                     className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-2 text-sm"
                   />

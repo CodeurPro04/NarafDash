@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
   CheckCircle,
   Clock3,
@@ -10,11 +10,6 @@ import {
   UserCheck,
   XCircle,
 } from 'lucide-react';
-import {
-  publicConstructionService,
-  publicInvestmentService,
-  publicPropertyService,
-} from '../../services/api';
 import { resolveMediaUrl } from '../../utils/media';
 import SecureImage from '../common/SecureImage';
 
@@ -36,11 +31,6 @@ const ClientRequestDomainSections = ({
   emptyPendingLabel = 'Aucune demande.',
   emptyHistoryLabel = 'Aucun historique.',
 }) => {
-  const [propertyDetails, setPropertyDetails] = useState({});
-  const [constructionDetails, setConstructionDetails] = useState({});
-  const [investmentDetails, setInvestmentDetails] = useState({});
-
-  const extractPayload = (response) => response?.data?.data ?? response?.data ?? [];
   const typeLabel = (type) => (
     type === 'construction' ? 'Construction'
       : type === 'investissement' ? 'Investissement'
@@ -114,34 +104,33 @@ const ClientRequestDomainSections = ({
     return status || 'Non renseigne';
   };
   const getTargetPreview = (item) => {
-    const propertyUuid = item.property?.uuid || item.property_uuid || item.property?.id;
-    const resolvedProperty = propertyDetails[propertyUuid] || item.property;
-    if (resolvedProperty) {
+    // La cible (propriete/projet) est deja incluse par le backend (eager
+    // loading) dans la reponse des demandes clients : inutile de refaire un
+    // appel reseau par demande, qui echouait meme silencieusement pour les
+    // biens/projets non-approuves (l'API publique ne renvoie que les
+    // ressources approuvees).
+    if (item.property) {
       return {
-        label: resolvedProperty.title || 'Propriete',
-        image: getPropertyImage(resolvedProperty),
+        label: item.property.title || 'Propriete',
+        image: getPropertyImage(item.property),
         type: 'property',
       };
     }
 
     const construction = item.construction_project || item.constructionProject;
-    const constructionUuid = construction?.uuid || item.construction_project_uuid || item.construction_uuid || construction?.id;
-    const resolvedConstruction = constructionDetails[constructionUuid] || construction;
     if (construction) {
       return {
-        label: resolvedConstruction?.title || 'Projet de construction',
-        image: getCollectionImage(resolvedConstruction),
+        label: construction.title || 'Projet de construction',
+        image: getCollectionImage(construction),
         type: 'construction',
       };
     }
 
     const investment = item.investment_project || item.investmentProject;
-    const investmentUuid = investment?.uuid || item.investment_project_uuid || item.investment_uuid || investment?.id;
-    const resolvedInvestment = investmentDetails[investmentUuid] || investment;
     if (investment) {
       return {
-        label: resolvedInvestment?.title || 'Projet d investissement',
-        image: getCollectionImage(resolvedInvestment),
+        label: investment.title || 'Projet d investissement',
+        image: getCollectionImage(investment),
         type: 'investment',
       };
     }
@@ -153,97 +142,17 @@ const ClientRequestDomainSections = ({
     };
   };
 
-  useEffect(() => {
-    const loadDetails = async () => {
-      const items = [...requests, ...history];
-      const propertyUuids = items
-        .map((item) => item.property?.uuid || item.property_uuid || item.property?.id)
-        .filter(Boolean)
-        .filter((uuid, index, array) => array.indexOf(uuid) === index);
-      const constructionUuids = items
-        .map((item) => (
-          item.construction_project?.uuid
-          || item.constructionProject?.uuid
-          || item.construction_project_uuid
-          || item.construction_uuid
-          || item.construction_project?.id
-          || item.constructionProject?.id
-        ))
-        .filter(Boolean)
-        .filter((uuid, index, array) => array.indexOf(uuid) === index);
-      const investmentUuids = items
-        .map((item) => (
-          item.investment_project?.uuid
-          || item.investmentProject?.uuid
-          || item.investment_project_uuid
-          || item.investment_uuid
-          || item.investment_project?.id
-          || item.investmentProject?.id
-        ))
-        .filter(Boolean)
-        .filter((uuid, index, array) => array.indexOf(uuid) === index);
-
-      if (propertyUuids.length > 0) {
-        const propertyResults = await Promise.allSettled(
-          propertyUuids.map((uuid) => publicPropertyService.getById(uuid))
-        );
-        setPropertyDetails(propertyResults.reduce((acc, result, index) => {
-          if (result.status !== 'fulfilled') return acc;
-          const payload = extractPayload(result.value);
-          const property = payload?.data || payload;
-          if (property && typeof property === 'object') acc[propertyUuids[index]] = property;
-          return acc;
-        }, {}));
-      } else {
-        setPropertyDetails({});
-      }
-
-      if (constructionUuids.length > 0) {
-        const constructionResponse = await publicConstructionService.getAll();
-        const constructionPayload = extractPayload(constructionResponse);
-        const constructionList = Array.isArray(constructionPayload?.data || constructionPayload)
-          ? (constructionPayload?.data || constructionPayload)
-          : [];
-        setConstructionDetails(constructionList.reduce((acc, project) => {
-          const uuid = project?.uuid || project?.id;
-          if (uuid && constructionUuids.includes(uuid)) acc[uuid] = project;
-          return acc;
-        }, {}));
-      } else {
-        setConstructionDetails({});
-      }
-
-      if (investmentUuids.length > 0) {
-        const investmentResults = await Promise.allSettled(
-          investmentUuids.map((uuid) => publicInvestmentService.getById(uuid))
-        );
-        setInvestmentDetails(investmentResults.reduce((acc, result, index) => {
-          if (result.status !== 'fulfilled') return acc;
-          const payload = extractPayload(result.value);
-          const project = payload?.data || payload;
-          if (project && typeof project === 'object') acc[investmentUuids[index]] = project;
-          return acc;
-        }, {}));
-      } else {
-        setInvestmentDetails({});
-      }
-    };
-
-    loadDetails().catch((error) => {
-      console.error('Erreur chargement cibles demandes clients:', error);
-    });
-  }, [requests, history]);
-
   const filteredAgents = useMemo(
     () => agents.filter((agent) => {
       const needed = requiredAgentType(requestType);
-      return !agent.agent_type || agent.agent_type === needed;
+      return agent.agent_type === needed;
     }),
     [agents, requestType]
   );
 
   return (
     <>
+      {pendingTitle && (
       <div className="surface-panel p-6 space-y-4">
         <div className="flex items-center gap-2">
           <FileText className="h-5 w-5" />
@@ -405,6 +314,7 @@ const ClientRequestDomainSections = ({
           </div>
         )}
       </div>
+      )}
 
       {historyTitle && (
         <div className="surface-panel p-6 space-y-4">
