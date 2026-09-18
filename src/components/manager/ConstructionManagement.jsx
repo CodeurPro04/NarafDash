@@ -307,17 +307,20 @@ const ConstructionManagement = () => {
   };
 
   const handleImageFiles = (event) => {
-    setImageFiles((prev) => [...prev, ...Array.from(event.target.files || [])]);
+    const files = Array.from(event.target.files || []);
+    setImageFiles((prev) => [...prev, ...files]);
     event.target.value = '';
   };
 
   const handlePlanFiles = (event) => {
-    setPlanFiles((prev) => [...prev, ...Array.from(event.target.files || [])]);
+    const files = Array.from(event.target.files || []);
+    setPlanFiles((prev) => [...prev, ...files]);
     event.target.value = '';
   };
 
   const handleRender3DFiles = (event) => {
-    setRender3DFiles((prev) => [...prev, ...Array.from(event.target.files || [])]);
+    const files = Array.from(event.target.files || []);
+    setRender3DFiles((prev) => [...prev, ...files]);
     event.target.value = '';
   };
 
@@ -373,28 +376,28 @@ const ConstructionManagement = () => {
     event.preventDefault();
     setSaving(true);
     setError('');
-    const payload = {
-      ...formData,
-      budget_min: formData.budget_min ? Number(formData.budget_min) : null,
-      budget_max: formData.budget_max ? Number(formData.budget_max) : null,
-      surface_area: formData.surface_area ? Number(formData.surface_area) : null,
-      country_id: formData.country_id || null,
-    };
-    const hasFiles = imageFiles.length > 0 || planFiles.length > 0 || render3DFiles.length > 0;
-    const requestData = hasFiles ? new FormData() : payload;
-
-    if (hasFiles) {
-      Object.entries(payload).forEach(([key, value]) => {
-        if (value !== null && value !== undefined) {
-          requestData.append(key, value);
-        }
-      });
-      imageFiles.forEach((file) => requestData.append('images[]', file));
-      planFiles.forEach((file) => requestData.append('plans[]', file));
-      render3DFiles.forEach((file) => requestData.append('render_3d[]', file));
-    }
-
     try {
+      const payload = {
+        ...formData,
+        budget_min: formData.budget_min ? Number(formData.budget_min) : null,
+        budget_max: formData.budget_max ? Number(formData.budget_max) : null,
+        surface_area: formData.surface_area ? Number(formData.surface_area) : null,
+        country_id: formData.country_id || null,
+      };
+      const hasFiles = imageFiles.length > 0 || planFiles.length > 0 || render3DFiles.length > 0;
+      const requestData = hasFiles ? new FormData() : payload;
+
+      if (hasFiles) {
+        Object.entries(payload).forEach(([key, value]) => {
+          if (value !== null && value !== undefined) {
+            requestData.append(key, value);
+          }
+        });
+        imageFiles.forEach((file) => requestData.append('images[]', file));
+        planFiles.forEach((file) => requestData.append('plans[]', file));
+        render3DFiles.forEach((file) => requestData.append('render_3d[]', file));
+      }
+
       if (editingProject?.uuid) {
         await service.updateConstructionProject(editingProject.uuid, requestData);
       } else {
@@ -867,6 +870,7 @@ const ConstructionManagement = () => {
                           <label className="block text-sm font-medium mb-2">Budget min</label>
                           <input
                             type="number"
+                            step="0.01"
                             name="budget_min"
                             value={formData.budget_min}
                             onChange={handleChange}
@@ -879,6 +883,7 @@ const ConstructionManagement = () => {
                           <label className="block text-sm font-medium mb-2">Budget max</label>
                           <input
                             type="number"
+                            step="0.01"
                             name="budget_max"
                             value={formData.budget_max}
                             onChange={handleChange}
@@ -891,6 +896,7 @@ const ConstructionManagement = () => {
                           <label className="block text-sm font-medium mb-2">Surface (m2)</label>
                           <input
                             type="number"
+                            step="0.01"
                             name="surface_area"
                             value={formData.surface_area}
                             onChange={handleChange}

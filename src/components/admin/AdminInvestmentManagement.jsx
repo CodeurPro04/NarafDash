@@ -167,27 +167,31 @@ const AdminInvestmentManagement = () => {
     }).format(Number(value));
   };
 
-  const parseList = (value) => value
+  const parseList = (value) => (value || '')
     .split('\n')
     .map((item) => item.trim())
     .filter(Boolean);
   const handleDocumentFiles = (event) => {
-    setDocumentFiles((prev) => [...prev, ...Array.from(event.target.files || [])]);
+    const files = Array.from(event.target.files || []);
+    setDocumentFiles((prev) => [...prev, ...files]);
     event.target.value = '';
   };
 
   const handleImageFiles = (event) => {
-    setImageFiles((prev) => [...prev, ...Array.from(event.target.files || [])]);
+    const files = Array.from(event.target.files || []);
+    setImageFiles((prev) => [...prev, ...files]);
     event.target.value = '';
   };
 
   const handlePlanFiles = (event) => {
-    setPlanFiles((prev) => [...prev, ...Array.from(event.target.files || [])]);
+    const files = Array.from(event.target.files || []);
+    setPlanFiles((prev) => [...prev, ...files]);
     event.target.value = '';
   };
 
   const handleRender3DFiles = (event) => {
-    setRender3DFiles((prev) => [...prev, ...Array.from(event.target.files || [])]);
+    const files = Array.from(event.target.files || []);
+    setRender3DFiles((prev) => [...prev, ...files]);
     event.target.value = '';
   };
 
@@ -430,6 +434,8 @@ const AdminInvestmentManagement = () => {
       featured: Boolean(project.featured),
       documents_path: Array.isArray(project.documents_path) ? project.documents_path.join('\n') : '',
       images_path: Array.isArray(project.images_path) ? project.images_path.join('\n') : '',
+      plans_path: Array.isArray(project.plans_path) ? project.plans_path.join('\n') : '',
+      render_3d_path: Array.isArray(project.render_3d_path) ? project.render_3d_path.join('\n') : '',
       description: project.description || '',
       country_id: project.country_id || project.country?.id || '',
     });
@@ -484,43 +490,43 @@ const AdminInvestmentManagement = () => {
     e.preventDefault();
     setSaving(true);
     setError('');
-    const payload = {
-      ...formData,
-      surface_area: formData.surface_area ? Number(formData.surface_area) : null,
-      total_investment: formData.total_investment ? Number(formData.total_investment) : null,
-      min_investment: formData.min_investment ? Number(formData.min_investment) : null,
-      expected_return: formData.expected_return ? Number(formData.expected_return) : null,
-      duration_months: formData.duration_months ? Number(formData.duration_months) : null,
-      current_funding: formData.current_funding !== '' ? Number(formData.current_funding) : null,
-      investors_count: formData.investors_count !== '' ? Number(formData.investors_count) : null,
-      start_date: formData.start_date || null,
-      end_date: formData.end_date || null,
-      featured: Boolean(formData.featured),
-      documents_path: parseList(formData.documents_path),
-      images_path: parseList(formData.images_path),
-      plans_path: parseList(formData.plans_path),
-      render_3d_path: parseList(formData.render_3d_path),
-      country_id: formData.country_id || null,
-    };
-
-    const hasFiles = documentFiles.length > 0 || imageFiles.length > 0 || planFiles.length > 0 || render3DFiles.length > 0;
-    const requestData = hasFiles ? new FormData() : payload;
-
-    if (hasFiles) {
-      Object.entries(payload).forEach(([key, value]) => {
-        if (Array.isArray(value)) {
-          value.forEach((item) => requestData.append(`${key}[]`, item));
-        } else if (value !== null && value !== undefined) {
-          requestData.append(key, value);
-        }
-      });
-      documentFiles.forEach((file) => requestData.append('documents[]', file));
-      imageFiles.forEach((file) => requestData.append('images[]', file));
-      planFiles.forEach((file) => requestData.append('plans[]', file));
-      render3DFiles.forEach((file) => requestData.append('render_3d[]', file));
-    }
-
     try {
+      const payload = {
+        ...formData,
+        surface_area: formData.surface_area ? Number(formData.surface_area) : null,
+        total_investment: formData.total_investment ? Number(formData.total_investment) : null,
+        min_investment: formData.min_investment ? Number(formData.min_investment) : null,
+        expected_return: formData.expected_return ? Number(formData.expected_return) : null,
+        duration_months: formData.duration_months ? Number(formData.duration_months) : null,
+        current_funding: formData.current_funding !== '' ? Number(formData.current_funding) : null,
+        investors_count: formData.investors_count !== '' ? Number(formData.investors_count) : null,
+        start_date: formData.start_date || null,
+        end_date: formData.end_date || null,
+        featured: Boolean(formData.featured),
+        documents_path: parseList(formData.documents_path),
+        images_path: parseList(formData.images_path),
+        plans_path: parseList(formData.plans_path),
+        render_3d_path: parseList(formData.render_3d_path),
+        country_id: formData.country_id || null,
+      };
+
+      const hasFiles = documentFiles.length > 0 || imageFiles.length > 0 || planFiles.length > 0 || render3DFiles.length > 0;
+      const requestData = hasFiles ? new FormData() : payload;
+
+      if (hasFiles) {
+        Object.entries(payload).forEach(([key, value]) => {
+          if (Array.isArray(value)) {
+            value.forEach((item) => requestData.append(`${key}[]`, item));
+          } else if (value !== null && value !== undefined) {
+            requestData.append(key, value);
+          }
+        });
+        documentFiles.forEach((file) => requestData.append('documents[]', file));
+        imageFiles.forEach((file) => requestData.append('images[]', file));
+        planFiles.forEach((file) => requestData.append('plans[]', file));
+        render3DFiles.forEach((file) => requestData.append('render_3d[]', file));
+      }
+
       if (editingProject?.uuid) {
         await service.updateInvestment(editingProject.uuid, requestData);
       } else {

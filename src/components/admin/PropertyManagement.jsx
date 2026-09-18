@@ -26,6 +26,7 @@ import {
   XCircle,
   LocateFixed,
   Map as MapIcon,
+  Pencil,
 } from 'lucide-react';
 import { resolveMediaUrl } from '../../utils/media';
 import SecureImage from '../common/SecureImage';
@@ -34,6 +35,9 @@ import { useAddressLocation } from '../../hooks/useAddressLocation';
 
 const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
 const ACCEPTED_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'];
+// surface_area et land_area sont stockes en decimal:2 cote backend ; sans step="0.01"
+// un input number refuse silencieusement (validation HTML native) toute valeur avec decimales.
+const DECIMAL_CHAR_KEYS = ['surface_area', 'land_area'];
 
 const initialFormData = {
   title: '',
@@ -72,6 +76,10 @@ const PropertyManagement = () => {
   const [images, setImages] = useState([]);
   const [planImages, setPlanImages] = useState([]);
   const [render3DImages, setRender3DImages] = useState([]);
+  const [editingProperty, setEditingProperty] = useState(null);
+  const [existingImages, setExistingImages] = useState([]);
+  const [existingPlanImages, setExistingPlanImages] = useState([]);
+  const [existingRender3DImages, setExistingRender3DImages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -214,7 +222,62 @@ const PropertyManagement = () => {
     setImages([]);
     setPlanImages([]);
     setRender3DImages([]);
+    setEditingProperty(null);
+    setExistingImages([]);
+    setExistingPlanImages([]);
+    setExistingRender3DImages([]);
     locationPicker.reset();
+  };
+
+  const handleEdit = (property) => {
+    setEditingProperty(property);
+    setImages([]);
+    setPlanImages([]);
+    setRender3DImages([]);
+    const media = Array.isArray(property.media) ? property.media : [];
+    setExistingImages(media.filter((item) => !item.category || item.category === 'standard'));
+    setExistingPlanImages(media.filter((item) => item.category === 'plan'));
+    setExistingRender3DImages(media.filter((item) => item.category === 'three_d'));
+    setFormData({
+      title: property.title || '',
+      description: property.description || '',
+      property_type_id: property.property_type_id || property.property_type?.id || '',
+      transaction_type: property.transaction_type || 'vente',
+      price: property.price ?? '',
+      currency: property.currency || 'XOF',
+      negotiable: Boolean(property.negotiable),
+      surface_area: property.surface_area ?? '',
+      land_area: property.land_area ?? '',
+      bedrooms: property.bedrooms ?? '',
+      bathrooms: property.bathrooms ?? '',
+      parking_spaces: property.parking_spaces ?? '',
+      floor_number: property.floor_number ?? '',
+      total_floors: property.total_floors ?? '',
+      year_built: property.year_built ?? '',
+      address: property.address || '',
+      city: property.city || '',
+      commune: property.commune || '',
+      quartier: property.quartier || '',
+      latitude: property.latitude ?? '',
+      longitude: property.longitude ?? '',
+      feature_ids: Array.isArray(property.features) ? property.features.map((feature) => feature.id) : [],
+      country_id: property.country_id || property.country?.id || '',
+    });
+    locationPicker.reset();
+    setShowCreateForm(true);
+    setError('');
+  };
+
+  const handleRemoveExistingMedia = async (mediaItem, categorySetter) => {
+    if (!mediaItem?.id) return;
+    if (!window.confirm('Supprimer ce visuel ?')) return;
+    try {
+      await adminService.deletePropertyMedia(mediaItem.id);
+      categorySetter((prev) => prev.filter((item) => item.id !== mediaItem.id));
+    } catch (removeError) {
+      console.error('Erreur suppression media:', removeError);
+      setError(removeError.response?.data?.message || 'Erreur lors de la suppression du visuel.');
+    }
   };
 
   const activeRules = useMemo(
@@ -235,7 +298,7 @@ const PropertyManagement = () => {
       { label: 'Description', done: formData.description.trim().length > 0 },
       { label: 'Adresse', done: formData.address.trim().length > 0 },
       { label: 'Ville', done: formData.city.trim().length > 0 },
-      { label: 'Photos du bien', done: images.length > 0 },
+      { label: 'Photos du bien', done: images.length > 0 || existingImages.length > 0 },
     ];
     activeRules.fields
       .filter((field) => field.required)
@@ -243,7 +306,7 @@ const PropertyManagement = () => {
         items.push({ label: field.label, done: formData[field.key] !== '' && formData[field.key] !== null && formData[field.key] !== undefined });
       });
     return items;
-  }, [formData, activeRules, images.length]);
+  }, [formData, activeRules, images.length, existingImages.length]);
 
   const completedRequiredCount = requiredChecklist.filter((item) => item.done).length;
   const completionPercent = Math.round((completedRequiredCount / requiredChecklist.length) * 100);
@@ -281,6 +344,7 @@ const PropertyManagement = () => {
     }
     setError('');
     setImages((prev) => [...prev, ...files]);
+    event.target.value = '';
   };
 
   const removeImage = (index) => {
@@ -297,6 +361,7 @@ const PropertyManagement = () => {
     }
     setError('');
     setPlanImages((prev) => [...prev, ...files]);
+    event.target.value = '';
   };
 
   const removePlanImage = (index) => {
@@ -313,6 +378,7 @@ const PropertyManagement = () => {
     }
     setError('');
     setRender3DImages((prev) => [...prev, ...files]);
+    event.target.value = '';
   };
 
   const removeRender3DImage = (index) => {
@@ -335,13 +401,34 @@ const PropertyManagement = () => {
     )
   );
 
-  const handleCreateProperty = async (event) => {
+  const renderExistingMediaGrid = (mediaItems, categorySetter, label) => (
+    mediaItems.length > 0 && (
+      <div>
+        <p className="text-sm font-medium mb-3">{label} deja en ligne ({mediaItems.length})</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {mediaItems.map((item) => (
+            <div key={item.id} className="relative">
+              <SecureImage src={resolveMediaUrl(getMediaCandidate(item))} alt={label} className="w-full h-24 object-cover rounded-lg" />
+              <button type="button" onClick={() => handleRemoveExistingMedia(item, categorySetter)} className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-[rgb(var(--clay))] text-white text-xs">x</button>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  );
+
+  const handleSubmit = async (event) => {
     event.preventDefault();
     setSaving(true);
     setError('');
-    if (images.length === 0) {
+    if (!editingProperty && images.length === 0) {
       setSaving(false);
       setError('Veuillez ajouter au moins une image pour creer la propriete.');
+      return;
+    }
+    if (editingProperty && existingImages.length === 0 && images.length === 0) {
+      setSaving(false);
+      setError('La propriete doit conserver au moins une image.');
       return;
     }
 
@@ -383,16 +470,21 @@ const PropertyManagement = () => {
       images.forEach((image) => payload.append('images[]', image));
       planImages.forEach((image) => payload.append('plan_images[]', image));
       render3DImages.forEach((image) => payload.append('render_3d_images[]', image));
-      await adminService.createProperty(payload);
+
+      if (editingProperty?.uuid) {
+        await adminService.updateProperty(editingProperty.uuid, payload);
+      } else {
+        await adminService.createProperty(payload);
+      }
       resetForm();
       setShowCreateForm(false);
       setPage(1);
       await loadProperties();
     } catch (creationError) {
-      console.error('Erreur creation propriete:', creationError);
+      console.error('Erreur enregistrement propriete:', creationError);
       const apiErrors = creationError.response?.data?.errors;
       const details = apiErrors ? Object.values(apiErrors).flat().join(' ') : '';
-      setError(creationError.response?.data?.message || details || 'Impossible de creer la propriete.');
+      setError(creationError.response?.data?.message || details || 'Impossible d\'enregistrer la propriete.');
     } finally {
       setSaving(false);
     }
@@ -468,11 +560,13 @@ const PropertyManagement = () => {
             <div>
               <p className="chip">Administration</p>
               <h1 className="text-2xl sm:text-3xl font-semibold mt-3 text-[rgb(var(--ink))]">
-                {isCreateOnlyView ? 'Ajouter une propriete' : 'Liste des proprietes'}
+                {isCreateOnlyView ? (editingProperty ? 'Modifier la propriete' : 'Ajouter une propriete') : 'Liste des proprietes'}
               </h1>
               <p className="text-sm text-[rgba(15,42,46,0.6)] mt-2">
                 {isCreateOnlyView
-                  ? "Renseignez les informations necessaires pour creer directement une propriete."
+                  ? (editingProperty
+                    ? "Mettez a jour les informations de cette propriete."
+                    : "Renseignez les informations necessaires pour creer directement une propriete.")
                   : 'Consultez, recherchez et validez les annonces de la plateforme.'}
               </p>
             </div>
@@ -542,7 +636,7 @@ const PropertyManagement = () => {
                   </button>
                 )}
                 {!isListOnlyView && (
-                  <button type="button" className="btn-primary w-full md:w-auto shrink-0" onClick={() => setShowCreateForm(true)}>
+                  <button type="button" className="btn-primary w-full md:w-auto shrink-0" onClick={() => { resetForm(); setShowCreateForm(true); }}>
                     <Plus className="h-4 w-4" />
                     Ajouter une propriete
                   </button>
@@ -551,7 +645,7 @@ const PropertyManagement = () => {
             )}
 
             {showCreateForm && (
-              <form onSubmit={handleCreateProperty} className="space-y-6">
+              <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <button
                     type="button"
@@ -616,7 +710,7 @@ const PropertyManagement = () => {
                         <div>
                           <label className="block text-sm font-medium mb-2">Prix *</label>
                           <div className="grid grid-cols-3 gap-2">
-                            <input type="number" name="price" value={formData.price} onChange={handleInputChange} required min="0" placeholder="0" className="col-span-2 rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]" />
+                            <input type="number" step="0.01" name="price" value={formData.price} onChange={handleInputChange} required min="0" placeholder="0" className="col-span-2 rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]" />
                             <input type="text" name="currency" value={formData.currency} onChange={handleInputChange} className="rounded-xl border border-[rgb(var(--line))] bg-white/70 px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]" />
                           </div>
                         </div>
@@ -653,7 +747,7 @@ const PropertyManagement = () => {
                           {activeRules.fields.map((field) => (
                             <div key={field.key}>
                               <label className="block text-xs text-[rgba(15,42,46,0.6)] mb-1">{field.label}{field.required ? ' *' : ''}</label>
-                              <input type="number" name={field.key} required={field.required} value={formData[field.key]} onChange={handleInputChange} min="0" className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]" />
+                              <input type="number" step={DECIMAL_CHAR_KEYS.includes(field.key) ? '0.01' : '1'} name={field.key} required={field.required} value={formData[field.key]} onChange={handleInputChange} min="0" className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]" />
                             </div>
                           ))}
                         </div>
@@ -775,6 +869,7 @@ const PropertyManagement = () => {
                             Selectionner des photos
                           </label>
                         </div>
+                        {renderExistingMediaGrid(existingImages, setExistingImages, 'Images standards')}
                         {renderPreviewGrid(images, removeImage, 'Images standards selectionnees')}
                       </div>
 
@@ -792,6 +887,7 @@ const PropertyManagement = () => {
                             Ajouter des plans
                           </label>
                         </div>
+                        {renderExistingMediaGrid(existingPlanImages, setExistingPlanImages, 'Plans')}
                         {renderPreviewGrid(planImages, removePlanImage, 'Plans selectionnes')}
                       </div>
 
@@ -809,6 +905,7 @@ const PropertyManagement = () => {
                             Ajouter des visuels 3D
                           </label>
                         </div>
+                        {renderExistingMediaGrid(existingRender3DImages, setExistingRender3DImages, 'Visuels 3D')}
                         {renderPreviewGrid(render3DImages, removeRender3DImage, 'Visuels 3D selectionnes')}
                       </div>
                     </div>
@@ -865,7 +962,9 @@ const PropertyManagement = () => {
                     <div className="surface-panel p-5 space-y-2.5">
                       <button type="submit" disabled={saving} className="btn-primary w-full justify-center">
                         <Save className="h-4 w-4" />
-                        {saving ? 'Creation...' : 'Creer la propriete'}
+                        {saving
+                          ? (editingProperty ? 'Enregistrement...' : 'Creation...')
+                          : (editingProperty ? 'Enregistrer les modifications' : 'Creer la propriete')}
                       </button>
                       <button type="button" onClick={() => { resetForm(); setShowCreateForm(false); }} className="btn-ghost w-full justify-center">
                         Annuler
@@ -935,6 +1034,7 @@ const PropertyManagement = () => {
                               </>
                             )}
                             <button onClick={() => { setSelectedProperty(property); setShowDetailsModal(true); }} className="btn-ghost px-3"><Eye className="h-3.5 w-3.5" /></button>
+                            <button onClick={() => handleEdit(property)} className="btn-ghost px-3"><Pencil className="h-3.5 w-3.5" /></button>
                             <button onClick={() => handleForceDelete(property.uuid)} className="btn-ghost px-3 text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
                           </div>
                         </div>
@@ -1061,6 +1161,13 @@ const PropertyManagement = () => {
                                     className="h-8 w-8 rounded-lg border border-[rgb(var(--line))] flex items-center justify-center text-[rgba(15,42,46,0.6)] hover:bg-white hover:text-[rgb(var(--ink))] transition"
                                   >
                                     <Eye className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleEdit(property)}
+                                    title="Modifier"
+                                    className="h-8 w-8 rounded-lg border border-[rgb(var(--line))] flex items-center justify-center text-[rgba(15,42,46,0.6)] hover:bg-white hover:text-[rgb(var(--ink))] transition"
+                                  >
+                                    <Pencil className="h-4 w-4" />
                                   </button>
                                   <button
                                     onClick={() => handleForceDelete(property.uuid)}

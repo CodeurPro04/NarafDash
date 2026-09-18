@@ -176,6 +176,8 @@ export const adminService = {
     api.post(`/v1/admin/properties/${uuid}/toggle-featured`),
   updatePropertyStatus: (uuid, data) =>
     api.post(`/v1/admin/properties/${uuid}/status`, data),
+  deletePropertyMedia: (id) =>
+    api.delete(`/v1/admin/properties/media/${id}`),
 
   // Projets d'investissement
   getInvestments: (params) => api.get("/v1/admin/investments", { params }),
@@ -215,6 +217,11 @@ export const adminService = {
   updateHouseModel: (uuid, data) =>
     apiUpdate(`/v1/admin/house-models/${uuid}`, data),
   deleteHouseModel: (uuid) => api.delete(`/v1/admin/house-models/${uuid}`),
+
+  // Section "Videos de presentation" (page d'accueil)
+  getPresentationVideo: () => api.get("/v1/admin/presentation-video"),
+  updatePresentationVideo: (data) =>
+    api.post("/v1/admin/presentation-video", data),
 
   // Partenariats
   getPendingPartnerships: () => api.get("/v1/admin/partnerships/pending"),
@@ -358,6 +365,8 @@ export const managerService = {
     api.post(`/v1/gestionnaire/properties/${uuid}/assign`, data),
   updatePropertyStatus: (uuid, data) =>
     api.post(`/v1/gestionnaire/properties/${uuid}/status`, data),
+  deletePropertyMedia: (id) =>
+    api.delete(`/v1/gestionnaire/properties/media/${id}`),
 
   // Gestion des demandes de recherche
   getPendingSearchRequests: (params) =>

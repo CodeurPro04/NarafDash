@@ -19,6 +19,7 @@ import AdminInvestmentManagement from "./components/admin/AdminInvestmentManagem
 import AdminPartnershipManagement from "./components/admin/AdminPartnershipManagement";
 import AdminPartnerProductsValidation from "./components/admin/AdminPartnerProductsValidation";
 import AdminHouseModelsManagement from "./components/admin/AdminHouseModelsManagement";
+import AdminPresentationVideoManagement from "./components/admin/AdminPresentationVideoManagement";
 import AdminReports from "./components/admin/AdminReports";
 import DashboardManager from "./components/manager/DashboardManager";
 import PropertyManagementManager from "./components/manager/PropertyManagement";
@@ -143,6 +144,14 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
                   <AdminHouseModelsManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/presentation-video"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
+                  <AdminPresentationVideoManagement />
                 </ProtectedRoute>
               }
             />
