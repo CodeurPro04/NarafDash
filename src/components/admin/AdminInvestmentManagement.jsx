@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
-import { adminService, managerService } from '../../services/api';
+import { adminService, managerService, countryService } from '../../services/api';
 import ClientRequestDomainSections from './ClientRequestDomainSections';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAddressLocation } from '../../hooks/useAddressLocation';
@@ -76,6 +76,8 @@ const AdminInvestmentManagement = () => {
     expected_return: '',
     duration_months: '',
     status: 'open',
+    current_funding: '',
+    investors_count: '',
     start_date: '',
     end_date: '',
     featured: false,
@@ -84,7 +86,9 @@ const AdminInvestmentManagement = () => {
     plans_path: '',
     render_3d_path: '',
     description: '',
+    country_id: '',
   });
+  const [countries, setCountries] = useState([]);
 
   const projectTypeOptions = [
     { value: 'immobilier', label: 'Immobilier' },
@@ -254,6 +258,12 @@ const AdminInvestmentManagement = () => {
 
   useEffect(() => {
     loadProjects();
+    countryService.getAll()
+      .then((res) => {
+        const payload = res?.data?.data ?? res?.data ?? [];
+        setCountries(Array.isArray(payload) ? payload : payload.data || []);
+      })
+      .catch((err) => console.error('Erreur chargement pays:', err));
   }, []);
 
   useEffect(() => {
@@ -281,6 +291,8 @@ const AdminInvestmentManagement = () => {
         expected_return: '',
         duration_months: '',
         status: 'open',
+        current_funding: '',
+        investors_count: '',
         start_date: '',
         end_date: '',
         featured: false,
@@ -289,6 +301,7 @@ const AdminInvestmentManagement = () => {
         plans_path: '',
         render_3d_path: '',
         description: '',
+        country_id: '',
       });
       locationPicker.reset();
       setShowForm(true);
@@ -410,12 +423,15 @@ const AdminInvestmentManagement = () => {
       expected_return: project.expected_return || '',
       duration_months: project.duration_months || '',
       status: project.status || 'open',
+      current_funding: project.current_funding ?? '',
+      investors_count: project.investors_count ?? '',
       start_date: project.start_date || '',
       end_date: project.end_date || '',
       featured: Boolean(project.featured),
       documents_path: Array.isArray(project.documents_path) ? project.documents_path.join('\n') : '',
       images_path: Array.isArray(project.images_path) ? project.images_path.join('\n') : '',
       description: project.description || '',
+      country_id: project.country_id || project.country?.id || '',
     });
     locationPicker.reset();
   };
@@ -442,6 +458,8 @@ const AdminInvestmentManagement = () => {
       expected_return: '',
       duration_months: '',
       status: 'open',
+      current_funding: '',
+      investors_count: '',
       start_date: '',
       end_date: '',
       featured: false,
@@ -450,6 +468,7 @@ const AdminInvestmentManagement = () => {
     plans_path: '',
     render_3d_path: '',
       description: '',
+      country_id: '',
     });
     locationPicker.reset();
   };
@@ -472,6 +491,8 @@ const AdminInvestmentManagement = () => {
       min_investment: formData.min_investment ? Number(formData.min_investment) : null,
       expected_return: formData.expected_return ? Number(formData.expected_return) : null,
       duration_months: formData.duration_months ? Number(formData.duration_months) : null,
+      current_funding: formData.current_funding !== '' ? Number(formData.current_funding) : null,
+      investors_count: formData.investors_count !== '' ? Number(formData.investors_count) : null,
       start_date: formData.start_date || null,
       end_date: formData.end_date || null,
       featured: Boolean(formData.featured),
@@ -479,6 +500,7 @@ const AdminInvestmentManagement = () => {
       images_path: parseList(formData.images_path),
       plans_path: parseList(formData.plans_path),
       render_3d_path: parseList(formData.render_3d_path),
+      country_id: formData.country_id || null,
     };
 
     const hasFiles = documentFiles.length > 0 || imageFiles.length > 0 || planFiles.length > 0 || render3DFiles.length > 0;
@@ -1024,6 +1046,20 @@ const AdminInvestmentManagement = () => {
                             placeholder="77140"
                           />
                         </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-2">Pays</label>
+                          <select
+                            name="country_id"
+                            value={formData.country_id}
+                            onChange={handleChange}
+                            className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
+                          >
+                            <option value="">Pays (optionnel)</option>
+                            {countries.map((country) => (
+                              <option key={country.id} value={country.id}>{country.flag ? `${country.flag} ` : ''}{country.name}</option>
+                            ))}
+                          </select>
+                        </div>
                         <div className="md:col-span-2 relative">
                           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                             <label className="block text-sm font-medium">Localisation</label>
@@ -1171,6 +1207,42 @@ const AdminInvestmentManagement = () => {
                             className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
                           />
                         </div>
+                      </div>
+                      <div className="pt-4 border-t border-[rgb(var(--line))]">
+                        <p className="text-xs text-[rgba(15,42,46,0.55)] mb-3">
+                          Suivi du financement — normalement mis a jour automatiquement quand un deal investissement est conclu, mais modifiable ici pour une correction manuelle.
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium mb-2">Montant collecte</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              name="current_funding"
+                              value={formData.current_funding}
+                              onChange={handleChange}
+                              min="0"
+                              className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium mb-2">Nombre d'investisseurs</label>
+                            <input
+                              type="number"
+                              step="1"
+                              name="investors_count"
+                              value={formData.investors_count}
+                              onChange={handleChange}
+                              min="0"
+                              className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
+                            />
+                          </div>
+                        </div>
+                        {formData.total_investment > 0 && formData.current_funding !== '' && (
+                          <p className="text-xs text-[rgba(15,42,46,0.6)] mt-3">
+                            Soit environ {Math.round((Number(formData.current_funding) / Number(formData.total_investment)) * 100)}% de l'objectif atteint.
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -2007,6 +2079,25 @@ const AdminInvestmentManagement = () => {
                   <div>
                     <p className="text-xs text-[rgba(15,42,46,0.45)]">Statut</p>
                     <p className="font-medium">{getStatusLabel(detailsModal.project.status)}</p>
+                  </div>
+                </div>
+                <div className="surface-soft px-5 py-4 space-y-3">
+                  <h4 className="text-sm font-semibold">Financement</h4>
+                  <div>
+                    <p className="text-xs text-[rgba(15,42,46,0.45)]">Montant collecte</p>
+                    <p className="font-medium">{formatPrice(detailsModal.project.current_funding)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-[rgba(15,42,46,0.45)]">Investisseurs</p>
+                    <p className="font-medium">{detailsModal.project.investors_count ?? 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-[rgba(15,42,46,0.45)]">Progression</p>
+                    <p className="font-medium">
+                      {detailsModal.project.total_investment
+                        ? `${Math.min(100, Math.round((Number(detailsModal.project.current_funding || 0) / Number(detailsModal.project.total_investment)) * 100))}%`
+                        : 'N/A'}
+                    </p>
                   </div>
                 </div>
               </div>

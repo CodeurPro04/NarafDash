@@ -1294,7 +1294,11 @@ const AgentAssignments = () => {
                     [conclusionModal.uuid]: { ...prev[conclusionModal.uuid], sale_price: e.target.value },
                   }))}
                   className="w-full rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-sm"
-                  placeholder="Prix final"
+                  placeholder={
+                    isInvestmentClientRequest(conclusionModal.item)
+                      ? 'Montant investi (ex: 500000) - ajoute automatiquement au financement'
+                      : 'Prix final'
+                  }
                 />
                 <input
                   type="text"

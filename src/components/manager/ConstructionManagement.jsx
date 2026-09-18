@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
-import { adminService, managerService, publicConstructionService } from '../../services/api';
+import { adminService, managerService, publicConstructionService, countryService } from '../../services/api';
 import { formatFcfaRange } from '../../utils/currency';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAddressLocation } from '../../hooks/useAddressLocation';
@@ -89,7 +89,9 @@ const ConstructionManagement = () => {
     surface_area: '',
     location: '',
     city: '',
+    country_id: '',
   });
+  const [countries, setCountries] = useState([]);
   const locationPicker = useAddressLocation({
     onResolved: ({ address, city }) => {
       setFormData((prev) => ({
@@ -118,6 +120,12 @@ const ConstructionManagement = () => {
   useEffect(() => {
     loadSpotlight();
     loadPendingPublications();
+    countryService.getAll()
+      .then((res) => {
+        const payload = res?.data?.data ?? res?.data ?? [];
+        setCountries(Array.isArray(payload) ? payload : payload.data || []);
+      })
+      .catch((err) => console.error('Erreur chargement pays:', err));
   }, []);
 
   useEffect(() => {
@@ -140,6 +148,7 @@ const ConstructionManagement = () => {
         surface_area: '',
         location: '',
         city: '',
+        country_id: '',
       });
       locationPicker.reset();
       setShowForm(true);
@@ -263,6 +272,7 @@ const ConstructionManagement = () => {
       surface_area: project.surface_area || '',
       location: project.location || '',
       city: project.city || '',
+      country_id: project.country_id || project.country?.id || '',
     });
     locationPicker.reset();
   };
@@ -284,6 +294,7 @@ const ConstructionManagement = () => {
       surface_area: '',
       location: '',
       city: '',
+      country_id: '',
     });
     locationPicker.reset();
   };
@@ -367,6 +378,7 @@ const ConstructionManagement = () => {
       budget_min: formData.budget_min ? Number(formData.budget_min) : null,
       budget_max: formData.budget_max ? Number(formData.budget_max) : null,
       surface_area: formData.surface_area ? Number(formData.surface_area) : null,
+      country_id: formData.country_id || null,
     };
     const hasFiles = imageFiles.length > 0 || planFiles.length > 0 || render3DFiles.length > 0;
     const requestData = hasFiles ? new FormData() : payload;
@@ -894,6 +906,20 @@ const ConstructionManagement = () => {
                             onChange={handleChange}
                             className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
                           />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-2">Pays</label>
+                          <select
+                            name="country_id"
+                            value={formData.country_id}
+                            onChange={handleChange}
+                            className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
+                          >
+                            <option value="">Pays (optionnel)</option>
+                            {countries.map((country) => (
+                              <option key={country.id} value={country.id}>{country.flag ? `${country.flag} ` : ''}{country.name}</option>
+                            ))}
+                          </select>
                         </div>
                         <div className="md:col-span-2 relative">
                           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">

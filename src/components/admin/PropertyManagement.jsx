@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
-import { adminService, propertyTypeService } from '../../services/api';
+import { adminService, propertyTypeService, countryService } from '../../services/api';
 import {
   Building,
   Trash2,
@@ -58,6 +58,7 @@ const initialFormData = {
   latitude: '',
   longitude: '',
   feature_ids: [],
+  country_id: '',
 };
 
 const PER_PAGE = 12;
@@ -66,6 +67,7 @@ const PropertyManagement = () => {
   const location = useLocation();
   const [properties, setProperties] = useState([]);
   const [types, setTypes] = useState([]);
+  const [countries, setCountries] = useState([]);
   const [features, setFeatures] = useState([]);
   const [images, setImages] = useState([]);
   const [planImages, setPlanImages] = useState([]);
@@ -134,14 +136,17 @@ const PropertyManagement = () => {
 
   const loadLookupData = async () => {
     try {
-      const [typesRes, featuresRes] = await Promise.all([
+      const [typesRes, featuresRes, countriesRes] = await Promise.all([
         propertyTypeService.getAll(),
         propertyTypeService.getFeatures(),
+        countryService.getAll(),
       ]);
       const typesPayload = extractPayload(typesRes);
       const featuresPayload = extractPayload(featuresRes);
+      const countriesPayload = extractPayload(countriesRes);
       setTypes(Array.isArray(typesPayload) ? typesPayload : typesPayload.data || []);
       setFeatures(Array.isArray(featuresPayload) ? featuresPayload : featuresPayload.data || []);
+      setCountries(Array.isArray(countriesPayload) ? countriesPayload : countriesPayload.data || []);
     } catch (lookupError) {
       console.error('Erreur chargement referentiels:', lookupError);
     }
@@ -732,6 +737,12 @@ const PropertyManagement = () => {
                           )}
                         </div>
                         <input type="text" name="city" value={formData.city} onChange={handleInputChange} required placeholder="Ville *" className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]" />
+                        <select name="country_id" value={formData.country_id} onChange={handleInputChange} className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]">
+                          <option value="">Pays (optionnel)</option>
+                          {countries.map((country) => (
+                            <option key={country.id} value={country.id}>{country.flag ? `${country.flag} ` : ''}{country.name}</option>
+                          ))}
+                        </select>
                         <input type="text" name="commune" value={formData.commune} onChange={handleInputChange} placeholder="Commune" className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]" />
                         <input type="text" name="quartier" value={formData.quartier} onChange={handleInputChange} placeholder="Quartier" className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]" />
                       </div>
