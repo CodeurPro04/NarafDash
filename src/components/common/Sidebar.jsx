@@ -318,10 +318,7 @@ const Sidebar = () => {
       <div className="p-6 border-b border-[rgba(255,253,250,0.08)]">
         <div className="space-y-4">
           <div>
-            <div className="inline-flex rounded-xl bg-white px-3 py-2 shadow-sm">
-              <img src="/images/logoabi2.png" alt="NARAF Immobilier" className="h-7 w-auto object-contain" />
-            </div>
-            <p className="mt-2 text-xs text-[rgba(255,253,250,0.6)]">Espace de gestion</p>
+            <p className="text-xs text-[rgba(255,253,250,0.6)]">Espace de gestion</p>
           </div>
         </div>
       </div>

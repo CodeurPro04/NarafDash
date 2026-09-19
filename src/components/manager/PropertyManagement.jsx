@@ -83,9 +83,9 @@ const PropertyManagement = () => {
     }
   };
 
-  const loadProperties = async () => {
+  const loadProperties = async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError('');
       const response = await managerService.getAllProperties();
       const payload = extractPayload(response);
@@ -96,7 +96,7 @@ const PropertyManagement = () => {
       setError(loadError.response?.data?.message || 'Impossible de charger les proprietes.');
       setProperties([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -233,7 +233,7 @@ const PropertyManagement = () => {
       await managerService.createProperty(payload);
       resetForm();
       setShowCreateForm(false);
-      await loadProperties();
+      await loadProperties({ silent: true });
     } catch (creationError) {
       console.error('Erreur creation propriete:', creationError);
       const apiErrors = creationError.response?.data?.errors;

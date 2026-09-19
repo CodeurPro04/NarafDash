@@ -45,8 +45,8 @@ const AgentAssignments = () => {
     loadAll();
   }, [agentType]);
 
-  const loadAll = async () => {
-    setLoading(true);
+  const loadAll = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     setError('');
 
     const jobs = [
@@ -83,7 +83,7 @@ const AgentAssignments = () => {
       setError('Certaines sections n\'ont pas pu etre chargees.');
     }
 
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
   const propertyPendingCount = useMemo(
@@ -285,7 +285,7 @@ const AgentAssignments = () => {
         ...prev,
         [uuid]: { content: '', summary: '', client_feedback: '', next_step: '' },
       }));
-      await loadAll();
+      await loadAll({ silent: true });
     } catch (err) {
       console.error('Erreur envoi rapport client:', err);
       setError(err.response?.data?.message || 'Impossible d envoyer le rapport a l administrateur.');
@@ -319,7 +319,7 @@ const AgentAssignments = () => {
         [uuid]: { content: '', sale_price: '', closure_note: '', next_step: '' },
       }));
       setConclusionModal({ open: false, uuid: '', item: null, error: '' });
-      await loadAll();
+      await loadAll({ silent: true });
     } catch (err) {
       console.error('Erreur conclusion offre client:', err);
       setConclusionModal((prev) => ({
@@ -333,7 +333,7 @@ const AgentAssignments = () => {
     try {
       setProcessingClientUuid(uuid);
       await agentService.approveClientRequest(uuid);
-      await loadAll();
+      await loadAll({ silent: true });
     } catch (err) {
       console.error('Erreur approbation client:', err);
       setError(err.response?.data?.message || 'Impossible d\'approuver cette demande client.');
@@ -361,7 +361,7 @@ const AgentAssignments = () => {
     try {
       setProcessingClientUuid(rejectModal.uuid);
       await agentService.rejectClientRequest(rejectModal.uuid, { rejection_reason: reason });
-      await loadAll();
+      await loadAll({ silent: true });
       setRejectModal({ open: false, uuid: '', reason: '', error: '' });
     } catch (err) {
       console.error('Erreur refus client:', err);

@@ -44,9 +44,9 @@ const AdminPartnershipManagement = () => {
     return { label: status || 'Inconnu', className: 'bg-slate-100 text-slate-700' };
   };
 
-  const loadApplications = async () => {
+  const loadApplications = async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError('');
       const response = await adminService.getAllPartnerships({
         status: filter !== 'all' ? filter : undefined,
@@ -54,12 +54,16 @@ const AdminPartnershipManagement = () => {
       });
       const list = extractList(response);
       setApplications(list);
-      setSelected(list.length > 0 ? list[0] : null);
+      setSelected((prev) => {
+        const stillExists = prev && list.find((item) => item.uuid === prev.uuid);
+        if (stillExists) return stillExists;
+        return list.length > 0 ? list[0] : null;
+      });
     } catch (err) {
       console.error('Erreur chargement partenariats:', err);
       setError('Impossible de charger les demandes.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -91,7 +95,7 @@ const AdminPartnershipManagement = () => {
     if (!selected?.uuid) return;
     try {
       await adminService.approvePartnership(selected.uuid);
-      await loadApplications();
+      await loadApplications({ silent: true });
     } catch (err) {
       console.error('Erreur validation partenariat:', err);
       setError('Erreur lors de la validation.');
@@ -120,7 +124,7 @@ const AdminPartnershipManagement = () => {
     try {
       await adminService.rejectPartnership(selected.uuid, { rejection_reason: rejectReason.trim() });
       setRejectReason('');
-      await loadApplications();
+      await loadApplications({ silent: true });
     } catch (err) {
       console.error('Erreur rejet partenariat:', err);
       setError('Erreur lors du rejet.');

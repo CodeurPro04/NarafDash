@@ -134,9 +134,9 @@ const MessageManagement = () => {
     }
   }, [thread]);
 
-  const loadMessages = async () => {
+  const loadMessages = async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError('');
       const response = await adminService.getMessages({
         page,
@@ -164,7 +164,7 @@ const MessageManagement = () => {
       setError('Impossible de charger les messages.');
       setMessages([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -228,7 +228,7 @@ const MessageManagement = () => {
       } else {
         await adminService.archiveMessage(uuid);
       }
-      await loadMessages();
+      await loadMessages({ silent: true });
     } catch (err) {
       console.error("Erreur lors de l'archivage:", err);
       alert(err.response?.data?.message || "Erreur lors de l'archivage de la conversation");
@@ -245,7 +245,7 @@ const MessageManagement = () => {
         await adminService.archiveMessage(selectedUuid);
         setThreadRoot((prev) => (prev ? { ...prev, archived_at: new Date().toISOString() } : prev));
       }
-      loadMessages();
+      loadMessages({ silent: true });
     } catch (err) {
       console.error("Erreur lors de l'archivage:", err);
       alert(err.response?.data?.message || "Erreur lors de l'archivage de la conversation");
@@ -264,7 +264,7 @@ const MessageManagement = () => {
         setThread((prev) => [...prev, newMessage]);
       }
       setReplyText('');
-      loadMessages();
+      loadMessages({ silent: true });
     } catch (err) {
       console.error('Erreur lors de la reponse:', err);
       setThreadError(err.response?.data?.message || "Erreur lors de l'envoi de la reponse.");
@@ -344,7 +344,7 @@ const MessageManagement = () => {
       setComposing(false);
       setComposeText('');
       setSelectedRecipient(null);
-      await loadMessages();
+      await loadMessages({ silent: true });
       if (created?.uuid) {
         setSelectedUuid(created.uuid);
         navigate(`/admin/messages?uuid=${created.uuid}`, { replace: true });

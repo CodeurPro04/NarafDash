@@ -62,9 +62,9 @@ const AdminPropertyCatalog = () => {
     setTimeout(() => setNotice(''), 3000);
   };
 
-  const loadCatalog = async () => {
+  const loadCatalog = async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError('');
       const [typesRes, featuresRes] = await Promise.all([
         propertyTypeService.getAll(),
@@ -78,7 +78,7 @@ const AdminPropertyCatalog = () => {
       console.error('Erreur lors du chargement du catalogue:', err);
       setError(err.response?.data?.message || 'Impossible de charger le catalogue.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -127,7 +127,7 @@ const AdminPropertyCatalog = () => {
       await adminService.createPropertyType({ name: newType.trim() });
       setNewType('');
       showNotice('Type de bien ajoute.');
-      await loadCatalog();
+      await loadCatalog({ silent: true });
     } catch (err) {
       console.error('Erreur lors de la creation du type:', err);
       setError(extractErrorMessage(err, 'Impossible de creer le type.'));
@@ -140,7 +140,7 @@ const AdminPropertyCatalog = () => {
       await adminService.createPropertyFeature({ name: newFeature.trim(), category: newFeatureCategory });
       setNewFeature('');
       showNotice('Caracteristique ajoutee.');
-      await loadCatalog();
+      await loadCatalog({ silent: true });
     } catch (err) {
       console.error('Erreur lors de la creation de la caracteristique:', err);
       setError(extractErrorMessage(err, 'Impossible de creer la caracteristique.'));
@@ -175,7 +175,7 @@ const AdminPropertyCatalog = () => {
       setEditingTypeId(null);
       setEditingTypeName('');
       showNotice('Type de bien mis a jour.');
-      await loadCatalog();
+      await loadCatalog({ silent: true });
     } catch (err) {
       console.error('Erreur lors de la mise a jour du type:', err);
       setError(extractErrorMessage(err, 'Impossible de mettre a jour le type.'));
@@ -192,7 +192,7 @@ const AdminPropertyCatalog = () => {
       setEditingFeatureId(null);
       setEditingFeatureName('');
       showNotice('Caracteristique mise a jour.');
-      await loadCatalog();
+      await loadCatalog({ silent: true });
     } catch (err) {
       console.error('Erreur lors de la mise a jour de la caracteristique:', err);
       setError(extractErrorMessage(err, 'Impossible de mettre a jour la caracteristique.'));
@@ -204,7 +204,7 @@ const AdminPropertyCatalog = () => {
     try {
       await adminService.deletePropertyType(id);
       showNotice('Type de bien supprime.');
-      await loadCatalog();
+      await loadCatalog({ silent: true });
     } catch (err) {
       console.error('Erreur lors de la suppression du type:', err);
       setError(extractErrorMessage(err, 'Impossible de supprimer le type.'));
@@ -216,7 +216,7 @@ const AdminPropertyCatalog = () => {
     try {
       await adminService.deletePropertyFeature(id);
       showNotice('Caracteristique supprimee.');
-      await loadCatalog();
+      await loadCatalog({ silent: true });
     } catch (err) {
       console.error('Erreur lors de la suppression de la caracteristique:', err);
       setError(extractErrorMessage(err, 'Impossible de supprimer la caracteristique.'));

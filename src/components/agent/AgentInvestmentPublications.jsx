@@ -46,9 +46,9 @@ const AgentInvestmentPublications = () => {
     loadProjects();
   }, []);
 
-  const loadProjects = async () => {
+  const loadProjects = async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError('');
       const response = await agentService.getInvestmentPublications();
       const payload = extractPayload(response);
@@ -58,7 +58,7 @@ const AgentInvestmentPublications = () => {
       console.error('Erreur chargement projets:', err);
       setError('Impossible de charger vos projets.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -163,7 +163,7 @@ const AgentInvestmentPublications = () => {
       } else {
         await agentService.createInvestmentPublication(requestData);
       }
-      await loadProjects();
+      await loadProjects({ silent: true });
       resetForm();
     } catch (err) {
       console.error('Erreur enregistrement:', err);

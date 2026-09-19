@@ -37,9 +37,9 @@ const AgentSearchRequests = () => {
     loadData();
   }, []);
 
-  const loadData = async () => {
+  const loadData = async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError('');
       const [assignedRes, historyRes] = await Promise.all([
         agentService.getAssignedSearchRequests(),
@@ -53,7 +53,7 @@ const AgentSearchRequests = () => {
       console.error('Erreur lors du chargement des demandes de recherche:', err);
       setError(err.response?.data?.message || 'Impossible de charger les demandes de recherche.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -134,7 +134,7 @@ const AgentSearchRequests = () => {
     try {
       setProcessingUuid(uuid);
       await agentService.approveSearchRequest(uuid);
-      await loadData();
+      await loadData({ silent: true });
     } catch (err) {
       console.error('Erreur approbation recherche:', err);
       setError(err.response?.data?.message || 'Impossible d approuver cette demande.');
@@ -153,7 +153,7 @@ const AgentSearchRequests = () => {
     try {
       setProcessingUuid(rejectModal.uuid);
       await agentService.rejectSearchRequest(rejectModal.uuid, { rejection_reason: reason });
-      await loadData();
+      await loadData({ silent: true });
       setRejectModal({ open: false, uuid: '', reason: '', error: '' });
     } catch (err) {
       console.error('Erreur refus recherche:', err);
@@ -183,7 +183,7 @@ const AgentSearchRequests = () => {
         ...prev,
         [uuid]: { content: '', summary: '', client_feedback: '', next_step: '' },
       }));
-      await loadData();
+      await loadData({ silent: true });
     } catch (err) {
       console.error('Erreur rapport recherche:', err);
       setError(err.response?.data?.message || 'Impossible d envoyer le rapport a l administration.');
@@ -217,7 +217,7 @@ const AgentSearchRequests = () => {
         [uuid]: { content: '', sale_price: '', closure_note: '', next_step: '' },
       }));
       setConclusionModal({ open: false, uuid: '', item: null, error: '' });
-      await loadData();
+      await loadData({ silent: true });
     } catch (err) {
       console.error('Erreur conclusion recherche:', err);
       setConclusionModal((prev) => ({

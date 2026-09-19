@@ -41,9 +41,9 @@ const VisitorRequests = () => {
       .catch((err) => console.error('Erreur chargement types de bien:', err));
   }, []);
 
-  const loadRequests = async () => {
+  const loadRequests = async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError('');
       const [searchRes, constructionRes] = await Promise.all([
         visitorService.getMySearchRequests(),
@@ -57,7 +57,7 @@ const VisitorRequests = () => {
       console.error('Erreur chargement demandes:', err);
       setError(err.response?.data?.message || 'Impossible de charger vos demandes.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -101,7 +101,7 @@ const VisitorRequests = () => {
         location_preferences: '',
         additional_requirements: '',
       });
-      await loadRequests();
+      await loadRequests({ silent: true });
     } catch (err) {
       console.error('Erreur creation recherche:', err);
       const apiErrors = err.response?.data?.errors;
@@ -130,7 +130,7 @@ const VisitorRequests = () => {
         location: '',
         city: '',
       });
-      await loadRequests();
+      await loadRequests({ silent: true });
     } catch (err) {
       console.error('Erreur creation construction:', err);
       const apiErrors = err.response?.data?.errors;

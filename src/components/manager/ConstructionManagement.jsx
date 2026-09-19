@@ -220,9 +220,9 @@ const ConstructionManagement = () => {
     }
   };
 
-  const loadProjects = async () => {
+  const loadProjects = async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError('');
       const response = await service.getAllConstructionProjects({
         page,
@@ -249,12 +249,15 @@ const ConstructionManagement = () => {
       setError('Impossible de charger les projets.');
       setProjects([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
+  // refreshData n'est appelee qu'apres une action (creation, suppression,
+  // approbation, rejet) : on garde la liste affichee et on la met a jour
+  // silencieusement pour eviter l'effet de rechargement brutal.
   const refreshData = async () => {
-    await Promise.all([loadProjects(), loadPendingPublications()]);
+    await Promise.all([loadProjects({ silent: true }), loadPendingPublications()]);
   };
 
   const handleChange = (event) => {

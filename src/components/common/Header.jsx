@@ -135,7 +135,7 @@ const Header = () => {
           <div className="flex items-center gap-4">
             <div>
               <img
-                src="/images/logoabi2.png"
+                src="/images/logonaraf.png"
                 alt="NARAF Immobilier"
                 className="h-8 w-auto object-contain"
               />

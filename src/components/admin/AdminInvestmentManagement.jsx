@@ -344,9 +344,9 @@ const AdminInvestmentManagement = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listPage, listSearchTerm, listStatusFilter]);
 
-  const loadProjects = async () => {
+  const loadProjects = async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError('');
       const [projectsResponse, agentsResponse, pendingClientResponse, clientHistoryResponse] = await Promise.all([
         service.getInvestments({ per_page: 100 }),
@@ -367,13 +367,13 @@ const AdminInvestmentManagement = () => {
       console.error('Erreur lors du chargement des projets:', err);
       setError('Impossible de charger les projets.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
-  const loadInvestmentList = async () => {
+  const loadInvestmentList = async ({ silent = false } = {}) => {
     try {
-      setListLoading(true);
+      if (!silent) setListLoading(true);
       const response = await service.getInvestments({
         page: listPage,
         per_page: LIST_PAGE_SIZE,
@@ -398,12 +398,15 @@ const AdminInvestmentManagement = () => {
       console.error('Erreur lors du chargement de la liste des projets:', err);
       setListProjects([]);
     } finally {
-      setListLoading(false);
+      if (!silent) setListLoading(false);
     }
   };
 
+  // N'est appelee qu'apres une action (creation, suppression, approbation,
+  // rejet, assignation...) : on garde les listes affichees et on les
+  // rafraichit silencieusement pour eviter l'effet de rechargement brutal.
   const refreshInvestmentData = async () => {
-    await Promise.all([loadProjects(), loadInvestmentList()]);
+    await Promise.all([loadProjects({ silent: true }), loadInvestmentList({ silent: true })]);
   };
 
   const handleChange = (e) => {
@@ -585,7 +588,7 @@ const AdminInvestmentManagement = () => {
   const handleApproveClientRequest = async (uuid) => {
     try {
       await service.approveClientRequest(uuid);
-      await loadProjects();
+      await loadProjects({ silent: true });
     } catch (err) {
       console.error('Erreur approbation demande client:', err);
       setError('Erreur lors de la mise a jour du statut.');
@@ -600,7 +603,7 @@ const AdminInvestmentManagement = () => {
     }
     try {
       await service.assignClientRequest(uuid, { agent_id: agentId });
-      await loadProjects();
+      await loadProjects({ silent: true });
     } catch (err) {
       console.error('Erreur assignation demande client:', err);
       setError(err.response?.data?.message || 'Erreur lors de l assignation.');

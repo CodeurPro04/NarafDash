@@ -91,9 +91,9 @@ const UserManagement = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, search, filterRole, filterStatus]);
 
-  const loadUsers = async () => {
+  const loadUsers = async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const response = await adminService.getUsers({
         page,
         per_page: PER_PAGE,
@@ -119,7 +119,7 @@ const UserManagement = () => {
       console.error('Erreur lors du chargement des utilisateurs:', error);
       setUsers([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -144,7 +144,7 @@ const UserManagement = () => {
     if (!window.confirm(`Supprimer le compte de ${user.first_name} ${user.last_name} ?`)) return;
     try {
       await adminService.deleteUser(user.id);
-      await loadUsers();
+      await loadUsers({ silent: true });
     } catch (error) {
       console.error('Erreur lors de la suppression:', error);
       alert("Erreur lors de la suppression de l'utilisateur.");
@@ -154,7 +154,7 @@ const UserManagement = () => {
   const handleToggleStatus = async (user) => {
     try {
       await adminService.toggleUserStatus(user.id);
-      await loadUsers();
+      await loadUsers({ silent: true });
     } catch (error) {
       console.error('Erreur lors du changement de statut:', error);
       alert('Erreur lors du changement de statut.');
@@ -184,7 +184,7 @@ const UserManagement = () => {
       }
       setShowModal(false);
       setEditingUser(null);
-      await loadUsers();
+      await loadUsers({ silent: true });
     } catch (error) {
       console.error('Erreur lors de la sauvegarde:', error);
       const apiErrors = error.response?.data?.errors;

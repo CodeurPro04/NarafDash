@@ -29,9 +29,9 @@ const AgentConstructionPublications = () => {
     loadProjects();
   }, []);
 
-  const loadProjects = async () => {
+  const loadProjects = async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError('');
       const response = await agentService.getConstructionPublications();
       const payload = extractPayload(response);
@@ -41,7 +41,7 @@ const AgentConstructionPublications = () => {
       console.error('Erreur chargement projets:', err);
       setError('Impossible de charger vos projets.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -125,7 +125,7 @@ const AgentConstructionPublications = () => {
       } else {
         await agentService.createConstructionPublication(requestData);
       }
-      await loadProjects();
+      await loadProjects({ silent: true });
       resetForm();
     } catch (err) {
       console.error('Erreur enregistrement:', err);

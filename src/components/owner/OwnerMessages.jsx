@@ -17,9 +17,9 @@ const OwnerMessages = () => {
     loadMessages();
   }, []);
 
-  const loadMessages = async () => {
+  const loadMessages = async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const response = await ownerService.getMessages();
       const payload = extractPayload(response);
       const list = payload.data || payload;
@@ -27,7 +27,7 @@ const OwnerMessages = () => {
     } catch (error) {
       console.error('Erreur lors du chargement des messages:', error);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -60,7 +60,7 @@ const OwnerMessages = () => {
       await ownerService.replyToMessage(selectedMessage.uuid, { message: replyText });
       setReplyText('');
       setSelectedMessage(null);
-      await loadMessages();
+      await loadMessages({ silent: true });
     } catch (error) {
       console.error('Erreur lors de l\'envoi:', error);
       alert('Erreur lors de l\'envoi de la réponse');

@@ -26,8 +26,8 @@ const AdminPartnerProductsValidation = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [notice, setNotice] = useState('');
 
-  const load = async () => {
-    setLoading(true);
+  const load = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const res = filter === 'pending'
         ? await partnerProductService.getPending()
@@ -39,7 +39,7 @@ const AdminPartnerProductsValidation = () => {
     } catch {
       setProducts([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -53,7 +53,7 @@ const AdminPartnerProductsValidation = () => {
     try {
       await partnerProductService.approve(selected.uuid);
       showNotice('Produit approuvé et publié.');
-      await load();
+      await load({ silent: true });
       setSelected(null);
     } catch { showNotice('Erreur lors de l\'approbation.'); }
     finally { setActionLoading(false); }
@@ -67,7 +67,7 @@ const AdminPartnerProductsValidation = () => {
       showNotice('Produit rejeté.');
       setShowRejectForm(false);
       setRejectReason('');
-      await load();
+      await load({ silent: true });
       setSelected(null);
     } catch { showNotice('Erreur lors du rejet.'); }
     finally { setActionLoading(false); }

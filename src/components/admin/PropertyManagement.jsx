@@ -160,9 +160,9 @@ const PropertyManagement = () => {
     }
   };
 
-  const loadProperties = async () => {
+  const loadProperties = async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError('');
       const response = await adminService.getAllProperties({
         page,
@@ -190,7 +190,7 @@ const PropertyManagement = () => {
       setError(loadError.response?.data?.message || 'Impossible de charger les proprietes.');
       setProperties([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -479,7 +479,7 @@ const PropertyManagement = () => {
       resetForm();
       setShowCreateForm(false);
       setPage(1);
-      await loadProperties();
+      await loadProperties({ silent: true });
     } catch (creationError) {
       console.error('Erreur enregistrement propriete:', creationError);
       const apiErrors = creationError.response?.data?.errors;
@@ -494,7 +494,7 @@ const PropertyManagement = () => {
     if (!window.confirm('Supprimer definitivement cette propriete ?')) return;
     try {
       await adminService.forceDeleteProperty(uuid);
-      await loadProperties();
+      await loadProperties({ silent: true });
     } catch (deleteError) {
       console.error('Erreur suppression:', deleteError);
       alert('Erreur lors de la suppression');
@@ -510,7 +510,7 @@ const PropertyManagement = () => {
     try {
       const payload = status === 'rejected' ? { status, rejection_reason: rejectionReason } : { status };
       await adminService.updatePropertyStatus(uuid, payload);
-      await loadProperties();
+      await loadProperties({ silent: true });
     } catch (updateError) {
       console.error('Erreur mise a jour statut:', updateError);
       alert(updateError.response?.data?.message || 'Erreur lors de la mise a jour du statut');

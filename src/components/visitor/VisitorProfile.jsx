@@ -44,9 +44,9 @@ const VisitorProfile = () => {
       .catch((err) => console.error('Erreur chargement types de bien:', err));
   }, []);
 
-  const loadData = async () => {
+  const loadData = async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError('');
       const [messagesRes, searchRes, constructionRes] = await Promise.all([
         visitorService.getMessages(),
@@ -64,7 +64,7 @@ const VisitorProfile = () => {
       console.error('Erreur chargement profil visiteur:', err);
       setError(err.response?.data?.message || 'Impossible de charger vos donnees.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -108,7 +108,7 @@ const VisitorProfile = () => {
         location_preferences: '',
         additional_requirements: '',
       });
-      await loadData();
+      await loadData({ silent: true });
     } catch (err) {
       console.error('Erreur creation recherche:', err);
       const apiErrors = err.response?.data?.errors;
@@ -137,7 +137,7 @@ const VisitorProfile = () => {
         location: '',
         city: '',
       });
-      await loadData();
+      await loadData({ silent: true });
     } catch (err) {
       console.error('Erreur creation construction:', err);
       const apiErrors = err.response?.data?.errors;
@@ -154,7 +154,7 @@ const VisitorProfile = () => {
       await visitorService.replyToMessage(replyingTo.uuid || replyingTo.id, { message: replyText });
       setReplyingTo(null);
       setReplyText('');
-      await loadData();
+      await loadData({ silent: true });
     } catch (err) {
       console.error('Erreur lors de la reponse:', err);
       setError(err.response?.data?.message || 'Erreur lors de la reponse.');

@@ -166,6 +166,15 @@ const ClientRequests = () => {
     if (status === 'pending') return 'En attente';
     return status || 'Non renseigne';
   };
+  const statusBadgeClass = (status, tracking) => {
+    if (tracking?.deal?.status === 'deal_concluded') return 'bg-emerald-100 text-emerald-700';
+    if (status === 'agent_approved' || status === 'approved') return 'bg-emerald-100 text-emerald-700';
+    if (status === 'agent_rejected' || status === 'rejected') return 'bg-rose-100 text-rose-700';
+    if (status === 'assigned') return 'bg-blue-100 text-blue-700';
+    if (status === 'fulfilled') return 'bg-teal-100 text-teal-700';
+    if (status === 'pending') return 'bg-amber-100 text-amber-700';
+    return 'bg-slate-100 text-slate-600';
+  };
   const trackingFor = (item) => {
     const reports = Array.isArray(item?.reports) ? item.reports : [];
     return {
@@ -206,9 +215,9 @@ const ClientRequests = () => {
     setHistoryPage(1);
   }, [historySearchTerm, historyTypeFilter]);
 
-  const loadData = async () => {
+  const loadData = async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const [agentsRes, pendingRes, historyRes, pendingSearchRes, historySearchRes] = await Promise.all([
         service.getAvailableAgents(),
         service.getPendingClientRequests({ per_page: 100 }),
@@ -232,7 +241,7 @@ const ClientRequests = () => {
     } catch (error) {
       console.error('Erreur chargement demandes clients:', error);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -250,7 +259,7 @@ const ClientRequests = () => {
         setRejectModal({ open: true, item: target || { uuid }, reason: '' });
         return;
       }
-      await loadData();
+      await loadData({ silent: true });
     } catch (error) {
       console.error('Erreur decision client:', error);
       alert('Erreur lors de la decision');
@@ -269,7 +278,7 @@ const ClientRequests = () => {
       } else {
         await service.rejectClientRequest(rejectModal.item.uuid, { rejection_reason: rejectModal.reason.trim() });
       }
-      await loadData();
+      await loadData({ silent: true });
       setRejectModal({ open: false, item: null, reason: '' });
     } catch (error) {
       console.error('Erreur decision client:', error);
@@ -290,7 +299,7 @@ const ClientRequests = () => {
       } else {
         await service.assignClientRequest(uuid, { agent_id: agentId });
       }
-      await loadData();
+      await loadData({ silent: true });
     } catch (error) {
       console.error('Erreur assignation client:', error);
       alert(error.response?.data?.message || 'Erreur lors de l\'assignation');
@@ -545,7 +554,7 @@ const ClientRequests = () => {
                             <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${typeBadgeClass(item.request_type)}`}>
                               {typeLabel(item.request_type)}
                             </span>
-                            <span className="chip">Statut: {statusLabel(item.status)}</span>
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${statusBadgeClass(item.status)}`}>Statut: {statusLabel(item.status)}</span>
                           </div>
                           <p className="text-sm text-[rgba(15,42,46,0.66)] break-words">
                             {item.message || 'Aucun message fourni par le client.'}
@@ -585,10 +594,6 @@ const ClientRequests = () => {
                                 </p>
                               </div>
                             </div>
-                          </div>
-                          <div className="rounded-2xl border border-[rgb(var(--line))] bg-white/85 px-3 py-3">
-                            <p className="text-[rgba(15,42,46,0.45)]">Decision</p>
-                            <p className="mt-1 font-medium text-[rgb(var(--ink))]">{statusLabel(item.status)}</p>
                           </div>
                           <div className="rounded-2xl border border-[rgb(var(--line))] bg-white/85 px-3 py-3">
                             <p className="text-[rgba(15,42,46,0.45)]">Agent requis</p>
@@ -823,7 +828,11 @@ const ClientRequests = () => {
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs min-w-0 xl:min-w-[440px]">
                             <div className="rounded-2xl border border-[rgb(var(--line))] bg-white/80 px-3 py-3">
                               <p className="text-[rgba(15,42,46,0.45)]">Statut</p>
-                              <p className="mt-1 font-medium text-[rgb(var(--ink))]">{statusLabel(item.status, tracking)}</p>
+                              <p className="mt-1">
+                                <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${statusBadgeClass(item.status, tracking)}`}>
+                                  {statusLabel(item.status, tracking)}
+                                </span>
+                              </p>
                             </div>
                             <div className="rounded-2xl border border-[rgb(var(--line))] bg-white/80 px-3 py-3">
                               <p className="text-[rgba(15,42,46,0.45)]">Agent</p>

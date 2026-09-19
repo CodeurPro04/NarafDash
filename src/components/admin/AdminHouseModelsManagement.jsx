@@ -151,9 +151,9 @@ const AdminHouseModelsManagement = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, searchTerm, statusFilter]);
 
-  const loadModels = async () => {
+  const loadModels = async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError("");
       const response = await adminService.getHouseModels({
         page,
@@ -201,7 +201,7 @@ const AdminHouseModelsManagement = () => {
       console.error("Erreur chargement modeles:", err);
       setError("Impossible de charger les modeles.");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -340,7 +340,7 @@ const AdminHouseModelsManagement = () => {
         setPage(1);
       }
       resetForm();
-      await loadModels();
+      await loadModels({ silent: true });
     } catch (err) {
       console.error("Erreur enregistrement modele:", err);
       setError(
@@ -357,7 +357,7 @@ const AdminHouseModelsManagement = () => {
 
     try {
       await adminService.deleteHouseModel(model.uuid);
-      await loadModels();
+      await loadModels({ silent: true });
     } catch (err) {
       console.error("Erreur suppression modele:", err);
       setError("Erreur lors de la suppression.");

@@ -39,15 +39,15 @@
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-[rgb(var(--ink))] text-white px-4 py-2 text-sm font-medium shadow-[0_12px_24px_rgba(15,42,46,0.18)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_28px_rgba(15,42,46,0.2)];
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-[rgb(var(--ink))] text-white px-4 py-2 text-sm font-medium shadow-[0_12px_24px_rgba(15,42,46,0.18)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_28px_rgba(15,42,46,0.2)] disabled:pointer-events-none disabled:opacity-40 disabled:shadow-none disabled:hover:translate-y-0 disabled:cursor-not-allowed;
   }
 
   .btn-accent {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-[rgb(var(--clay))] text-white px-4 py-2 text-sm font-medium shadow-[0_12px_24px_rgba(199,109,74,0.2)] transition hover:-translate-y-0.5;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-[rgb(var(--clay))] text-white px-4 py-2 text-sm font-medium shadow-[0_12px_24px_rgba(199,109,74,0.2)] transition hover:-translate-y-0.5 disabled:pointer-events-none disabled:opacity-40 disabled:shadow-none disabled:hover:translate-y-0 disabled:cursor-not-allowed;
   }
 
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-[rgb(var(--line))] px-4 py-2 text-sm font-medium text-[rgb(var(--ink))] hover:bg-[rgba(255,253,250,0.8)];
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-[rgb(var(--line))] px-4 py-2 text-sm font-medium text-[rgb(var(--ink))] hover:bg-[rgba(255,253,250,0.8)] disabled:pointer-events-none disabled:opacity-40 disabled:cursor-not-allowed;
   }
 
   .chip {

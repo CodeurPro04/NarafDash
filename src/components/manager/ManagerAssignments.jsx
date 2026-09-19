@@ -433,9 +433,9 @@ const ManagerAssignments = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPropertyView, propertyPage, propertyHistoryPage]);
 
-  const loadAssignments = async () => {
+  const loadAssignments = async ({ silent = false } = {}) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const [agentsRes, searchRes, constructionRes, propertyRes, clientRes, searchHistoryRes, constructionHistoryRes, propertyHistoryRes, clientHistoryRes] = await Promise.all([
         assignmentService.getAvailableAgents(),
         assignmentService.getPendingSearchRequests(),
@@ -470,7 +470,7 @@ const ManagerAssignments = () => {
     } catch (error) {
       console.error('Erreur lors du chargement des assignations:', error);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -499,8 +499,10 @@ const ManagerAssignments = () => {
 
   // Rafraichit les donnees apres une action : le comportement d'origine partout,
   // et en plus la pagination propriete quand on est sur cet onglet.
+  // "silent" evite de re-afficher le skeleton de chargement (et donc l'effet
+  // de rechargement brutal) puisque la liste est deja affichee a l'ecran.
   const refreshData = async () => {
-    await loadAssignments();
+    await loadAssignments({ silent: true });
     if (isPropertyView) {
       await loadPropertyRequests();
     }
