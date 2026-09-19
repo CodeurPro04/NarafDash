@@ -90,14 +90,18 @@ const ConstructionManagement = () => {
     location: '',
     city: '',
     country_id: '',
+    latitude: '',
+    longitude: '',
   });
   const [countries, setCountries] = useState([]);
   const locationPicker = useAddressLocation({
-    onResolved: ({ address, city }) => {
+    onResolved: ({ address, city, lat, lng }) => {
       setFormData((prev) => ({
         ...prev,
         location: address,
         city: prev.city || city,
+        latitude: Number.isFinite(lat) ? lat : prev.latitude,
+        longitude: Number.isFinite(lng) ? lng : prev.longitude,
       }));
     },
   });
@@ -149,6 +153,8 @@ const ConstructionManagement = () => {
         location: '',
         city: '',
         country_id: '',
+    latitude: '',
+    longitude: '',
       });
       locationPicker.reset();
       setShowForm(true);
@@ -273,6 +279,8 @@ const ConstructionManagement = () => {
       location: project.location || '',
       city: project.city || '',
       country_id: project.country_id || project.country?.id || '',
+      latitude: project.latitude ?? '',
+      longitude: project.longitude ?? '',
     });
     locationPicker.reset();
   };
@@ -295,6 +303,8 @@ const ConstructionManagement = () => {
       location: '',
       city: '',
       country_id: '',
+    latitude: '',
+    longitude: '',
     });
     locationPicker.reset();
   };
@@ -383,6 +393,8 @@ const ConstructionManagement = () => {
         budget_max: formData.budget_max ? Number(formData.budget_max) : null,
         surface_area: formData.surface_area ? Number(formData.surface_area) : null,
         country_id: formData.country_id || null,
+        latitude: formData.latitude !== '' ? Number(formData.latitude) : null,
+        longitude: formData.longitude !== '' ? Number(formData.longitude) : null,
       };
       const hasFiles = imageFiles.length > 0 || planFiles.length > 0 || render3DFiles.length > 0;
       const requestData = hasFiles ? new FormData() : payload;

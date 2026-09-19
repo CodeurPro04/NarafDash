@@ -87,6 +87,8 @@ const AdminInvestmentManagement = () => {
     render_3d_path: '',
     description: '',
     country_id: '',
+    latitude: '',
+    longitude: '',
   });
   const [countries, setCountries] = useState([]);
 
@@ -145,11 +147,13 @@ const AdminInvestmentManagement = () => {
   const basePath = user?.role === 'admin' ? '/admin/investments' : '/manager/investments';
 
   const locationPicker = useAddressLocation({
-    onResolved: ({ address, city }) => {
+    onResolved: ({ address, city, lat, lng }) => {
       setFormData((prev) => ({
         ...prev,
         location: address,
         city: prev.city || city,
+        latitude: Number.isFinite(lat) ? lat : prev.latitude,
+        longitude: Number.isFinite(lng) ? lng : prev.longitude,
       }));
     },
   });
@@ -306,6 +310,8 @@ const AdminInvestmentManagement = () => {
         render_3d_path: '',
         description: '',
         country_id: '',
+    latitude: '',
+    longitude: '',
       });
       locationPicker.reset();
       setShowForm(true);
@@ -438,6 +444,8 @@ const AdminInvestmentManagement = () => {
       render_3d_path: Array.isArray(project.render_3d_path) ? project.render_3d_path.join('\n') : '',
       description: project.description || '',
       country_id: project.country_id || project.country?.id || '',
+      latitude: project.latitude ?? '',
+      longitude: project.longitude ?? '',
     });
     locationPicker.reset();
   };
@@ -475,6 +483,8 @@ const AdminInvestmentManagement = () => {
     render_3d_path: '',
       description: '',
       country_id: '',
+    latitude: '',
+    longitude: '',
     });
     locationPicker.reset();
   };
@@ -508,6 +518,8 @@ const AdminInvestmentManagement = () => {
         plans_path: parseList(formData.plans_path),
         render_3d_path: parseList(formData.render_3d_path),
         country_id: formData.country_id || null,
+        latitude: formData.latitude !== '' ? Number(formData.latitude) : null,
+        longitude: formData.longitude !== '' ? Number(formData.longitude) : null,
       };
 
       const hasFiles = documentFiles.length > 0 || imageFiles.length > 0 || planFiles.length > 0 || render3DFiles.length > 0;
