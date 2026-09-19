@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
 import { agentService } from '../../services/api';
-import { CheckCircle, Clock, MessageSquare, Building, Mail, ArrowUpRight, Archive, FileText, HardHat, Send, Users, Handshake, Activity } from 'lucide-react';
+import { CheckCircle, Clock, MessageSquare, Building, Mail, ArrowUpRight, Archive, FileText, HardHat, Send, Users, Handshake, Activity, TrendingUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { normalizeAgentType } from '../../utils/agentType';
@@ -365,6 +365,66 @@ const DashboardAgent = () => {
     [propertyClientTimeline]
   );
 
+  // Meme logique de pipeline (Attente / Suivi / Conclu) que le dashboard admin,
+  // adaptee au seul domaine de l'agent connecte.
+  const pipeline = useMemo(() => {
+    if (agentType === 'constructeur') {
+      return {
+        label: 'Construction',
+        icon: HardHat,
+        hue: 'amber',
+        pending: constructionClientTimeline.filter((request) => request?.status === 'assigned').length,
+        followUp: constructionActiveFollowUps.length,
+        concluded: constructionConcludedDeals.length,
+      };
+    }
+    if (agentType === 'investissement') {
+      return {
+        label: 'Investissement',
+        icon: TrendingUp,
+        hue: 'emerald',
+        pending: investmentClientTimeline.filter((request) => request?.status === 'assigned').length,
+        followUp: investmentActiveFollowUps.length,
+        concluded: investmentConcludedDeals.length,
+      };
+    }
+    return {
+      label: 'Immobilier',
+      icon: Building,
+      hue: 'sky',
+      pending: stats.propertiesToValidate,
+      followUp: propertyActiveFollowUps.length,
+      concluded: propertyConcludedDeals.length,
+    };
+  }, [
+    agentType, stats.propertiesToValidate,
+    constructionClientTimeline, constructionActiveFollowUps, constructionConcludedDeals,
+    investmentClientTimeline, investmentActiveFollowUps, investmentConcludedDeals,
+    propertyActiveFollowUps, propertyConcludedDeals,
+  ]);
+
+  // Rampe monotone (claire -> foncee) par domaine, identique au dashboard admin.
+  const domainRamp = {
+    sky: ['bg-sky-50 text-sky-700', 'bg-sky-100 text-sky-800', 'bg-sky-600 text-white'],
+    amber: ['bg-amber-50 text-amber-700', 'bg-amber-100 text-amber-800', 'bg-amber-600 text-white'],
+    emerald: ['bg-emerald-50 text-emerald-700', 'bg-emerald-100 text-emerald-800', 'bg-emerald-600 text-white'],
+  };
+  const domainBadge = {
+    sky: 'bg-sky-100 text-sky-700',
+    amber: 'bg-amber-100 text-amber-700',
+    emerald: 'bg-emerald-100 text-emerald-700',
+  };
+  const domainBar = {
+    sky: 'bg-sky-500',
+    amber: 'bg-amber-500',
+    emerald: 'bg-emerald-500',
+  };
+  const pipelineTotal = Math.max(1, pipeline.pending + pipeline.followUp + pipeline.concluded);
+  const pipelinePendingPct = (pipeline.pending / pipelineTotal) * 100;
+  const pipelineFollowUpPct = (pipeline.followUp / pipelineTotal) * 100;
+  const pipelineConcludedPct = (pipeline.concluded / pipelineTotal) * 100;
+  const pipelineRamp = domainRamp[pipeline.hue];
+
   return (
     <div className="app-shell flex">
       <Sidebar />
@@ -372,31 +432,94 @@ const DashboardAgent = () => {
         <Header />
         <main className="flex-1 px-6 py-8">
           <div className="max-w-7xl mx-auto space-y-8">
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="chip">{headerCopy.label}</p>
-                <span className={`chip ${typeBadge.className}`}>Type: {typeBadge.label}</span>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-2 min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="chip">{headerCopy.label}</p>
+                  <span className={`chip ${typeBadge.className}`}>Type: {typeBadge.label}</span>
+                </div>
+                <h1 className="text-2xl sm:text-3xl font-semibold text-[rgb(var(--ink))]">{headerCopy.title}</h1>
+                <p className="text-sm text-[rgba(15,42,46,0.6)] max-w-2xl">
+                  {headerCopy.subtitle}
+                </p>
               </div>
-              <h1 className="text-3xl font-semibold mt-3">{headerCopy.title}</h1>
-              <p className="text-sm text-[rgba(15,42,46,0.6)] mt-2">
-                {headerCopy.subtitle}
-              </p>
+              <div className="surface-soft px-4 py-2.5 flex items-center gap-2.5 shrink-0">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                </span>
+                <span className="text-xs font-medium text-[rgba(15,42,46,0.7)] whitespace-nowrap">
+                  Espace agent operationnel
+                </span>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
               {statCards.map((stat) => (
-                <div key={stat.title} className="surface-card p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-[rgba(15,42,46,0.6)]">{stat.title}</p>
-                      <p className="text-3xl font-semibold mt-2">{loading ? '...' : stat.value}</p>
+                <div key={stat.title} className="surface-card p-4 sm:p-5 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs sm:text-sm text-[rgba(15,42,46,0.6)] truncate">{stat.title}</p>
+                      <p className="text-2xl sm:text-3xl font-semibold mt-1.5 text-[rgb(var(--ink))]">
+                        {loading ? '...' : Number(stat.value || 0).toLocaleString()}
+                      </p>
                     </div>
-                    <div className="h-12 w-12 rounded-2xl bg-[rgba(15,42,46,0.08)] flex items-center justify-center">
-                      <stat.icon className="h-6 w-6 text-[rgb(var(--ink))]" />
+                    <div className="h-9 w-9 sm:h-11 sm:w-11 shrink-0 rounded-2xl bg-[rgba(15,42,46,0.08)] flex items-center justify-center">
+                      <stat.icon className="h-4 w-4 sm:h-5 sm:w-5 text-[rgb(var(--ink))]" />
                     </div>
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* Pipeline operationnel du domaine de l'agent */}
+            <div className="surface-panel p-5 sm:p-6">
+              <div className="flex items-center justify-between mb-5">
+                <div>
+                  <h2 className="text-lg font-semibold text-[rgb(var(--ink))]">Pipeline operationnel</h2>
+                  <p className="text-xs text-[rgba(15,42,46,0.5)] mt-1">Repartition de vos dossiers par etape.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate('/agent/assigned?view=clients')}
+                className="group w-full max-w-sm rounded-[20px] border border-[rgba(15,42,46,0.08)] bg-white/80 p-5 text-left transition hover:border-[rgba(15,42,46,0.2)] hover:shadow-[0_12px_28px_rgba(15,42,46,0.08)]"
+              >
+                <div className="flex items-center justify-between">
+                  <span className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl ${domainBadge[pipeline.hue]}`}>
+                    <pipeline.icon className="h-5 w-5" />
+                  </span>
+                  <ArrowUpRight className="h-4 w-4 text-[rgba(15,42,46,0.35)] transition group-hover:text-[rgba(15,42,46,0.6)]" />
+                </div>
+                <p className="mt-3 text-base font-semibold text-[rgb(var(--ink))]">{pipeline.label}</p>
+
+                <div className="mt-4 flex h-2 w-full overflow-hidden rounded-full bg-[rgba(15,42,46,0.06)]">
+                  {pipeline.pending > 0 && (
+                    <span className={domainBar[pipeline.hue]} style={{ width: `${pipelinePendingPct}%`, opacity: 0.45 }} />
+                  )}
+                  {pipeline.followUp > 0 && (
+                    <span className={domainBar[pipeline.hue]} style={{ width: `${pipelineFollowUpPct}%`, opacity: 0.75 }} />
+                  )}
+                  {pipeline.concluded > 0 && (
+                    <span className={domainBar[pipeline.hue]} style={{ width: `${pipelineConcludedPct}%` }} />
+                  )}
+                </div>
+
+                <div className="mt-4 flex items-stretch gap-2">
+                  <div className={`flex-1 min-w-0 rounded-xl px-2 py-2.5 text-center ${pipelineRamp[0]}`}>
+                    <p className="text-[9px] font-semibold uppercase tracking-wide opacity-80">Attente</p>
+                    <p className="mt-1 text-base font-semibold">{loading ? '...' : pipeline.pending}</p>
+                  </div>
+                  <div className={`flex-1 min-w-0 rounded-xl px-2 py-2.5 text-center ${pipelineRamp[1]}`}>
+                    <p className="text-[9px] font-semibold uppercase tracking-wide opacity-80">Suivi</p>
+                    <p className="mt-1 text-base font-semibold">{loading ? '...' : pipeline.followUp}</p>
+                  </div>
+                  <div className={`flex-1 min-w-0 rounded-xl px-2 py-2.5 text-center ${pipelineRamp[2]}`}>
+                    <p className="text-[9px] font-semibold uppercase tracking-wide opacity-80">Conclu</p>
+                    <p className="mt-1 text-base font-semibold">{loading ? '...' : pipeline.concluded}</p>
+                  </div>
+                </div>
+              </button>
             </div>
 
             {agentType === 'immobilier' && (
@@ -734,60 +857,6 @@ const DashboardAgent = () => {
                           </div>
                         </div>
                         {!message.is_read && <span className="chip">Nouveau</span>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {agentType === 'immobilier' && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="surface-panel p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold">Demandes de recherche</h2>
-                    <button onClick={() => navigate('/agent/search-requests')} className="btn-ghost">
-                      Voir tout
-                      <ArrowUpRight className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <div className="space-y-3">
-                    {loading && <p className="text-sm text-[rgba(15,42,46,0.5)]">Chargement...</p>}
-                    {!loading && assignedSearchRequests.length === 0 && (
-                      <p className="text-sm text-[rgba(15,42,46,0.5)]">Aucune demande assignee.</p>
-                    )}
-                    {assignedSearchRequests.slice(0, 4).map((request) => (
-                      <div key={request.uuid} className="surface-soft px-4 py-3">
-                        <p className="text-sm font-medium">
-                          {request.property_type?.name || 'Recherche personnalisee'}
-                        </p>
-                        <p className="text-xs text-[rgba(15,42,46,0.5)]">
-                          {request.city || request.location_preferences?.join(', ') || 'Localisation a definir'}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="surface-panel p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold">Clients assignes</h2>
-                    <button onClick={() => navigate('/agent/assigned')} className="btn-ghost">
-                      Voir tout
-                      <ArrowUpRight className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <div className="space-y-3">
-                    {loading && <p className="text-sm text-[rgba(15,42,46,0.5)]">Chargement...</p>}
-                    {!loading && assignedClientRequests.length === 0 && (
-                      <p className="text-sm text-[rgba(15,42,46,0.5)]">Aucun client assigne.</p>
-                    )}
-                    {assignedClientRequests.slice(0, 4).map((request) => (
-                      <div key={request.uuid} className="surface-soft px-4 py-3">
-                        <p className="text-sm font-medium">{request.name || 'Client'}</p>
-                        <p className="text-xs text-[rgba(15,42,46,0.5)]">
-                          {formatClientType(request.request_type)} | {request.phone || 'Sans telephone'}
-                        </p>
                       </div>
                     ))}
                   </div>

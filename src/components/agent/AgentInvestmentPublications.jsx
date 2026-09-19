@@ -1,13 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
-import { agentService } from '../../services/api';
-import { Save, Plus, Upload, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { agentService, countryService } from '../../services/api';
+import { useAddressLocation } from '../../hooks/useAddressLocation';
+import {
+  Save, Plus, Upload, CheckCircle, XCircle, Clock, LocateFixed, Map as MapIcon,
+  TrendingUp, Image, FileText,
+} from 'lucide-react';
 
 const AgentInvestmentPublications = () => {
   const defaultImage =
     'https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=800&q=80';
   const [projects, setProjects] = useState([]);
+  const [countries, setCountries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -21,6 +26,9 @@ const AgentInvestmentPublications = () => {
     project_type: 'immobilier',
     location: '',
     city: '',
+    country_id: '',
+    latitude: '',
+    longitude: '',
     total_investment: '',
     min_investment: '',
     expected_return: '',
@@ -30,6 +38,53 @@ const AgentInvestmentPublications = () => {
     end_date: '',
     description: '',
   });
+
+  const projectTypeOptions = [
+    { value: 'immobilier', label: 'Immobilier' },
+    { value: 'construction', label: 'Construction' },
+    { value: 'renovation', label: 'Renovation' },
+  ];
+
+  const statusOptions = [
+    { value: 'open', label: 'Ouvert' },
+    { value: 'in_progress', label: 'En cours' },
+    { value: 'closed', label: 'Ferme' },
+    { value: 'completed', label: 'Termine' },
+  ];
+
+  const locationPicker = useAddressLocation({
+    onResolved: ({ address, city, lat, lng }) => {
+      setFormData((prev) => ({
+        ...prev,
+        location: address,
+        city: prev.city || city,
+        latitude: Number.isFinite(lat) ? lat : prev.latitude,
+        longitude: Number.isFinite(lng) ? lng : prev.longitude,
+      }));
+    },
+  });
+
+  const renderNewFilePreview = (files, onRemove, label) => (
+    files.length > 0 && (
+      <div>
+        <p className="text-sm font-medium mb-3">{label} ({files.length})</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {files.map((file, index) => (
+            <div key={`${file.name}-${index}`} className="relative">
+              {file.type?.startsWith('image/') ? (
+                <img src={URL.createObjectURL(file)} alt={`${label} ${index + 1}`} className="w-full h-20 object-cover rounded-lg" />
+              ) : (
+                <div className="h-20 w-full rounded-lg border border-[rgb(var(--line))] bg-white/70 flex items-center justify-center p-2">
+                  <span className="text-[11px] text-[rgba(15,42,46,0.6)] text-center break-words">{file.name}</span>
+                </div>
+              )}
+              <button type="button" onClick={() => onRemove(index)} className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-[rgb(var(--clay))] text-white text-xs">x</button>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  );
 
   const apiBase = import.meta.env.VITE_API_URL || 'https://api.africabuildinvest.com';
   const storageBase = apiBase.replace(/\/api\/?$/, '');
@@ -44,6 +99,12 @@ const AgentInvestmentPublications = () => {
 
   useEffect(() => {
     loadProjects();
+    countryService.getAll()
+      .then((res) => {
+        const payload = res?.data?.data ?? res?.data ?? [];
+        setCountries(Array.isArray(payload) ? payload : payload.data || []);
+      })
+      .catch((err) => console.error('Erreur chargement pays:', err));
   }, []);
 
   const loadProjects = async ({ silent = false } = {}) => {
@@ -68,19 +129,43 @@ const AgentInvestmentPublications = () => {
   };
 
   const handleDocumentFiles = (event) => {
-    setDocumentFiles(Array.from(event.target.files || []));
+    const files = Array.from(event.target.files || []);
+    setDocumentFiles((prev) => [...prev, ...files]);
+    event.target.value = '';
   };
 
   const handleImageFiles = (event) => {
-    setImageFiles(Array.from(event.target.files || []));
+    const files = Array.from(event.target.files || []);
+    setImageFiles((prev) => [...prev, ...files]);
+    event.target.value = '';
   };
 
   const handlePlanFiles = (event) => {
-    setPlanFiles(Array.from(event.target.files || []));
+    const files = Array.from(event.target.files || []);
+    setPlanFiles((prev) => [...prev, ...files]);
+    event.target.value = '';
   };
 
   const handleRender3DFiles = (event) => {
-    setRender3DFiles(Array.from(event.target.files || []));
+    const files = Array.from(event.target.files || []);
+    setRender3DFiles((prev) => [...prev, ...files]);
+    event.target.value = '';
+  };
+
+  const removeNewDocument = (index) => {
+    setDocumentFiles((prev) => prev.filter((_, fileIndex) => fileIndex !== index));
+  };
+
+  const removeNewImage = (index) => {
+    setImageFiles((prev) => prev.filter((_, fileIndex) => fileIndex !== index));
+  };
+
+  const removeNewPlan = (index) => {
+    setPlanFiles((prev) => prev.filter((_, fileIndex) => fileIndex !== index));
+  };
+
+  const removeNewRender3D = (index) => {
+    setRender3DFiles((prev) => prev.filter((_, fileIndex) => fileIndex !== index));
   };
 
   const handleEdit = (project) => {
@@ -94,6 +179,9 @@ const AgentInvestmentPublications = () => {
       project_type: project.project_type || 'immobilier',
       location: project.location || '',
       city: project.city || '',
+      country_id: project.country_id || project.country?.id || '',
+      latitude: project.latitude ?? '',
+      longitude: project.longitude ?? '',
       total_investment: project.total_investment || '',
       min_investment: project.min_investment || '',
       expected_return: project.expected_return || '',
@@ -103,6 +191,7 @@ const AgentInvestmentPublications = () => {
       end_date: project.end_date || '',
       description: project.description || '',
     });
+    locationPicker.reset();
   };
 
   const resetForm = () => {
@@ -116,6 +205,9 @@ const AgentInvestmentPublications = () => {
       project_type: 'immobilier',
       location: '',
       city: '',
+      country_id: '',
+      latitude: '',
+      longitude: '',
       total_investment: '',
       min_investment: '',
       expected_return: '',
@@ -125,6 +217,24 @@ const AgentInvestmentPublications = () => {
       end_date: '',
       description: '',
     });
+    locationPicker.reset();
+  };
+
+  const handleRemoveExistingFile = async (field, path) => {
+    if (!editingProject?.uuid) return;
+    if (!window.confirm('Supprimer ce fichier ?')) return;
+    try {
+      await agentService.updateInvestmentPublication(editingProject.uuid, { [field]: [path] });
+      setEditingProject((prev) => {
+        if (!prev) return prev;
+        const pathField = field.replace('remove_', '') + '_path';
+        return { ...prev, [pathField]: (prev[pathField] || []).filter((item) => item !== path) };
+      });
+      loadProjects({ silent: true });
+    } catch (err) {
+      console.error('Erreur suppression fichier:', err);
+      alert('Erreur lors de la suppression du fichier.');
+    }
   };
 
   const handleSubmit = async (event) => {
@@ -140,6 +250,9 @@ const AgentInvestmentPublications = () => {
       duration_months: formData.duration_months ? Number(formData.duration_months) : null,
       start_date: formData.start_date || null,
       end_date: formData.end_date || null,
+      country_id: formData.country_id || null,
+      latitude: formData.latitude !== '' ? Number(formData.latitude) : null,
+      longitude: formData.longitude !== '' ? Number(formData.longitude) : null,
     };
 
     const hasFiles = documentFiles.length > 0 || imageFiles.length > 0 || planFiles.length > 0 || render3DFiles.length > 0;
@@ -205,190 +318,479 @@ const AgentInvestmentPublications = () => {
               <div className="surface-panel p-4 text-sm text-[rgb(var(--clay))]">{error}</div>
             )}
 
-            <form onSubmit={handleSubmit} className="surface-panel p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-6">
               <div className="flex items-center gap-2">
                 <Plus className="h-5 w-5" />
                 <h2 className="text-lg font-semibold">
                   {editingProject ? 'Modifier un projet' : 'Nouveau projet'}
                 </h2>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium mb-2">Titre</label>
-                  <input
-                    name="title"
-                    value={formData.title}
-                    onChange={handleChange}
-                    className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
-                    required
-                  />
+
+              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start">
+                <div className="space-y-6 min-w-0">
+                  <div className="surface-panel p-6 space-y-5">
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-full bg-[rgb(var(--ink))] text-white flex items-center justify-center text-sm font-semibold shrink-0">1</div>
+                      <div>
+                        <h2 className="text-lg font-semibold">Informations generales</h2>
+                        <p className="text-xs text-[rgba(15,42,46,0.55)]">Titre, type et description du projet d'investissement</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium mb-2">Titre *</label>
+                        <input
+                          name="title"
+                          value={formData.title}
+                          onChange={handleChange}
+                          placeholder="Ex. Residence premium - Abidjan"
+                          className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-2">Type *</label>
+                        <select
+                          name="project_type"
+                          value={formData.project_type}
+                          onChange={handleChange}
+                          className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
+                        >
+                          {projectTypeOptions.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium mb-2">Description</label>
+                        <textarea
+                          name="description"
+                          value={formData.description}
+                          onChange={handleChange}
+                          rows="4"
+                          placeholder="Decrivez le projet : atouts, environnement, particularites..."
+                          className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="surface-panel p-6 space-y-5">
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-full bg-[rgb(var(--ink))] text-white flex items-center justify-center text-sm font-semibold shrink-0">2</div>
+                      <div>
+                        <h2 className="text-lg font-semibold">Localisation</h2>
+                        <p className="text-xs text-[rgba(15,42,46,0.55)]">Ville, adresse et reperes geographiques</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-2">Ville</label>
+                        <input
+                          name="city"
+                          value={formData.city}
+                          onChange={handleChange}
+                          className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-2">Pays</label>
+                        <select
+                          name="country_id"
+                          value={formData.country_id}
+                          onChange={handleChange}
+                          className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
+                        >
+                          <option value="">Pays (optionnel)</option>
+                          {countries.map((country) => (
+                            <option key={country.id} value={country.id}>{country.flag ? `${country.flag} ` : ''}{country.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="md:col-span-2 relative">
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                          <label className="block text-sm font-medium">Localisation</label>
+                          <div className="flex items-center gap-3 text-xs">
+                            <button
+                              type="button"
+                              onClick={locationPicker.locateMe}
+                              disabled={locationPicker.locating}
+                              className="inline-flex items-center gap-1 font-medium text-[rgb(var(--clay))] hover:underline disabled:opacity-50"
+                            >
+                              <LocateFixed className="h-3.5 w-3.5" />
+                              {locationPicker.locating ? 'Localisation...' : 'Me localiser'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => locationPicker.setShowMap((prev) => !prev)}
+                              className="inline-flex items-center gap-1 font-medium text-[rgb(var(--ink))] hover:underline"
+                            >
+                              <MapIcon className="h-3.5 w-3.5" />
+                              {locationPicker.showMap ? 'Masquer la carte' : 'Choisir sur la carte'}
+                            </button>
+                          </div>
+                        </div>
+                        <div className="relative">
+                          <input
+                            name="location"
+                            value={formData.location}
+                            onChange={(event) => { handleChange(event); locationPicker.handleInputChange(event.target.value); }}
+                            onFocus={() => formData.location.trim().length >= 3 && locationPicker.fetchSuggestions(formData.location.trim())}
+                            onBlur={() => setTimeout(() => locationPicker.clearSuggestions(), 150)}
+                            placeholder="Ex. Boulevard de la Marina, Cotonou"
+                            autoComplete="off"
+                            className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
+                          />
+                          {locationPicker.loadingSuggestions && (
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-[rgba(15,42,46,0.4)]">...</span>
+                          )}
+                          {locationPicker.suggestions.length > 0 && (
+                            <div className="surface-card absolute z-20 mt-1.5 w-full max-h-56 overflow-y-auto p-1.5">
+                              {locationPicker.suggestions.map((item) => (
+                                <button
+                                  key={item.place_id}
+                                  type="button"
+                                  onMouseDown={(event) => event.preventDefault()}
+                                  onClick={() => locationPicker.selectSuggestion(item)}
+                                  className="w-full flex items-start gap-2 text-left px-3 py-2 rounded-lg text-xs hover:bg-[rgba(15,42,46,0.05)] transition-colors"
+                                >
+                                  <TrendingUp className="h-3.5 w-3.5 mt-0.5 shrink-0 text-[rgba(15,42,46,0.4)] rotate-90" />
+                                  <span className="text-[rgba(15,42,46,0.75)]">{item.display_name}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        {locationPicker.geoError && <p className="text-xs text-[rgb(var(--clay))] mt-2">{locationPicker.geoError}</p>}
+                        {locationPicker.showMap && (
+                          <div className="mt-3 rounded-xl overflow-hidden border border-[rgb(var(--line))]">
+                            <div ref={locationPicker.mapContainerRef} className="h-56 w-full" />
+                            <div className="px-3 py-2 bg-[rgba(15,42,46,0.03)] text-[11px] text-[rgba(15,42,46,0.6)] flex items-center justify-between gap-2">
+                              <span>Cliquez sur la carte ou deplacez le repere pour ajuster la position.</span>
+                              {locationPicker.reverseGeocoding && <span className="shrink-0">Recherche de l'adresse...</span>}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="surface-panel p-6 space-y-5">
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-full bg-[rgb(var(--ink))] text-white flex items-center justify-center text-sm font-semibold shrink-0">3</div>
+                      <div>
+                        <h2 className="text-lg font-semibold">Financement</h2>
+                        <p className="text-xs text-[rgba(15,42,46,0.55)]">Prix, ticket minimum et rendement</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-2">Investissement total</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          name="total_investment"
+                          value={formData.total_investment}
+                          onChange={handleChange}
+                          min="0"
+                          className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-2">Ticket minimum</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          name="min_investment"
+                          value={formData.min_investment}
+                          onChange={handleChange}
+                          min="0"
+                          className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-2">Rendement attendu (%)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          name="expected_return"
+                          value={formData.expected_return}
+                          onChange={handleChange}
+                          min="0"
+                          className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-2">Duree (mois)</label>
+                        <input
+                          type="number"
+                          step="1"
+                          name="duration_months"
+                          value={formData.duration_months}
+                          onChange={handleChange}
+                          min="0"
+                          className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="surface-panel p-6 space-y-5">
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-full bg-[rgb(var(--ink))] text-white flex items-center justify-center text-sm font-semibold shrink-0">4</div>
+                      <div>
+                        <h2 className="text-lg font-semibold">Calendrier & statut</h2>
+                        <p className="text-xs text-[rgba(15,42,46,0.55)]">Periode et visibilite de l'offre</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-2">Date de debut</label>
+                        <input
+                          type="date"
+                          name="start_date"
+                          value={formData.start_date}
+                          onChange={handleChange}
+                          className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-2">Date de fin</label>
+                        <input
+                          type="date"
+                          name="end_date"
+                          value={formData.end_date}
+                          onChange={handleChange}
+                          className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-2">Statut</label>
+                        <select
+                          name="status"
+                          value={formData.status}
+                          onChange={handleChange}
+                          className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
+                        >
+                          {statusOptions.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="surface-panel p-6 space-y-6">
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-full bg-[rgb(var(--ink))] text-white flex items-center justify-center text-sm font-semibold shrink-0">5</div>
+                      <div>
+                        <h2 className="text-lg font-semibold">Visuels & documents</h2>
+                        <p className="text-xs text-[rgba(15,42,46,0.55)]">Photos, plans, rendus 3D et documents</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <p className="text-sm font-medium">Images <span className="text-[rgba(15,42,46,0.45)] font-normal">({imageFiles.length})</span></p>
+                      <div className="border-2 border-dashed border-[rgb(var(--line))] hover:border-[rgba(199,109,74,0.5)] transition-colors rounded-xl p-8 text-center bg-[rgba(15,42,46,0.015)]">
+                        <div className="h-12 w-12 rounded-full bg-white flex items-center justify-center mx-auto mb-3 shadow-sm">
+                          <Image className="h-5 w-5 text-[rgb(var(--clay))]" />
+                        </div>
+                        <p className="text-sm font-medium mb-1">Photos du projet</p>
+                        <p className="text-xs text-[rgba(15,42,46,0.55)] mb-4">JPG, PNG ou WEBP</p>
+                        <input type="file" multiple accept="image/*" onChange={handleImageFiles} className="hidden" id="agent-investment-image-upload" />
+                        <label htmlFor="agent-investment-image-upload" className="btn-primary cursor-pointer inline-flex">
+                          <Upload className="h-4 w-4" />
+                          Selectionner des photos
+                        </label>
+                      </div>
+                      {renderNewFilePreview(imageFiles, removeNewImage, 'Nouvelles images')}
+                      {editingProject && Array.isArray(editingProject.images_path) && editingProject.images_path.length > 0 && (
+                        <div>
+                          <p className="text-sm font-medium mb-3">Images existantes ({editingProject.images_path.length})</p>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            {editingProject.images_path.map((path) => (
+                              <div key={path} className="relative">
+                                <img src={getStorageUrl(path)} alt="" className="w-full h-20 object-cover rounded-lg" />
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveExistingFile('remove_images', path)}
+                                  className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-[rgb(var(--clay))] text-white text-xs"
+                                >
+                                  x
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-4">
+                      <p className="text-sm font-medium">Documents <span className="text-[rgba(15,42,46,0.45)] font-normal">({documentFiles.length})</span></p>
+                      <div className="border-2 border-dashed border-[rgb(var(--line))] hover:border-[rgba(199,109,74,0.5)] transition-colors rounded-xl p-8 text-center bg-[rgba(15,42,46,0.015)]">
+                        <div className="h-12 w-12 rounded-full bg-white flex items-center justify-center mx-auto mb-3 shadow-sm">
+                          <FileText className="h-5 w-5 text-[rgba(15,42,46,0.5)]" />
+                        </div>
+                        <p className="text-sm font-medium mb-1">Documents du dossier</p>
+                        <p className="text-xs text-[rgba(15,42,46,0.55)] mb-4">PDF, Word, Excel ou PowerPoint</p>
+                        <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx" onChange={handleDocumentFiles} className="hidden" id="agent-investment-document-upload" />
+                        <label htmlFor="agent-investment-document-upload" className="btn-ghost cursor-pointer inline-flex">
+                          <Upload className="h-4 w-4" />
+                          Ajouter des documents
+                        </label>
+                      </div>
+                      {renderNewFilePreview(documentFiles, removeNewDocument, 'Nouveaux documents')}
+                      {editingProject && Array.isArray(editingProject.documents_path) && editingProject.documents_path.length > 0 && (
+                        <div>
+                          <p className="text-sm font-medium mb-3">Documents existants ({editingProject.documents_path.length})</p>
+                          <div className="space-y-2">
+                            {editingProject.documents_path.map((path) => (
+                              <div key={path} className="flex items-center gap-2">
+                                <a href={getStorageUrl(path)} target="_blank" rel="noreferrer" className="flex-1 min-w-0 block rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-2 text-sm text-[rgb(var(--ink))] hover:underline truncate">
+                                  {path.split('/').pop()}
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveExistingFile('remove_documents', path)}
+                                  className="shrink-0 h-8 w-8 rounded-full bg-[rgb(var(--clay))] text-white text-xs"
+                                >
+                                  x
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-4">
+                      <p className="text-sm font-medium">Plans <span className="text-[rgba(15,42,46,0.45)] font-normal">({planFiles.length})</span></p>
+                      <div className="border-2 border-dashed border-[rgb(var(--line))] hover:border-[rgba(199,109,74,0.5)] transition-colors rounded-xl p-8 text-center bg-[rgba(15,42,46,0.015)]">
+                        <div className="h-12 w-12 rounded-full bg-white flex items-center justify-center mx-auto mb-3 shadow-sm">
+                          <FileText className="h-5 w-5 text-[rgba(15,42,46,0.5)]" />
+                        </div>
+                        <p className="text-sm font-medium mb-1">Plans techniques</p>
+                        <p className="text-xs text-[rgba(15,42,46,0.55)] mb-4">Images ou PDF - optionnel</p>
+                        <input type="file" multiple accept="image/*,.pdf" onChange={handlePlanFiles} className="hidden" id="agent-investment-plan-upload" />
+                        <label htmlFor="agent-investment-plan-upload" className="btn-ghost cursor-pointer inline-flex">
+                          <Upload className="h-4 w-4" />
+                          Ajouter des plans
+                        </label>
+                      </div>
+                      {renderNewFilePreview(planFiles, removeNewPlan, 'Nouveaux plans')}
+                      {editingProject && Array.isArray(editingProject.plans_path) && editingProject.plans_path.length > 0 && (
+                        <div>
+                          <p className="text-sm font-medium mb-3">Plans existants ({editingProject.plans_path.length})</p>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            {editingProject.plans_path.map((path) => (
+                              <div key={path} className="relative">
+                                {path.toLowerCase().endsWith('.pdf') ? (
+                                  <div className="h-20 w-full rounded-lg border border-[rgb(var(--line))] bg-white/70 flex items-center justify-center p-2">
+                                    <a href={getStorageUrl(path)} target="_blank" rel="noreferrer" className="text-xs text-[rgb(var(--ink))] hover:underline break-words text-center">
+                                      {path.split('/').pop()}
+                                    </a>
+                                  </div>
+                                ) : (
+                                  <img src={getStorageUrl(path)} alt="Plan" className="w-full h-20 object-cover rounded-lg" />
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveExistingFile('remove_plans', path)}
+                                  className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-[rgb(var(--clay))] text-white text-xs"
+                                >
+                                  x
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-4">
+                      <p className="text-sm font-medium">Rendus 3D <span className="text-[rgba(15,42,46,0.45)] font-normal">({render3DFiles.length})</span></p>
+                      <div className="border-2 border-dashed border-[rgb(var(--line))] hover:border-[rgba(199,109,74,0.5)] transition-colors rounded-xl p-8 text-center bg-[rgba(15,42,46,0.015)]">
+                        <div className="h-12 w-12 rounded-full bg-white flex items-center justify-center mx-auto mb-3 shadow-sm">
+                          <TrendingUp className="h-5 w-5 text-[rgba(15,42,46,0.5)]" />
+                        </div>
+                        <p className="text-sm font-medium mb-1">Rendus 3D et visuels de projection</p>
+                        <p className="text-xs text-[rgba(15,42,46,0.55)] mb-4">Optionnel</p>
+                        <input type="file" multiple accept="image/*,.pdf" onChange={handleRender3DFiles} className="hidden" id="agent-investment-render3d-upload" />
+                        <label htmlFor="agent-investment-render3d-upload" className="btn-ghost cursor-pointer inline-flex">
+                          <Upload className="h-4 w-4" />
+                          Ajouter des visuels 3D
+                        </label>
+                      </div>
+                      {renderNewFilePreview(render3DFiles, removeNewRender3D, 'Nouveaux visuels 3D')}
+                      {editingProject && Array.isArray(editingProject.render_3d_path) && editingProject.render_3d_path.length > 0 && (
+                        <div>
+                          <p className="text-sm font-medium mb-3">Visuels 3D existants ({editingProject.render_3d_path.length})</p>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            {editingProject.render_3d_path.map((path) => (
+                              <div key={path} className="relative">
+                                {path.toLowerCase().endsWith('.pdf') ? (
+                                  <div className="h-20 w-full rounded-lg border border-[rgb(var(--line))] bg-white/70 flex items-center justify-center p-2">
+                                    <a href={getStorageUrl(path)} target="_blank" rel="noreferrer" className="text-xs text-[rgb(var(--ink))] hover:underline break-words text-center">
+                                      {path.split('/').pop()}
+                                    </a>
+                                  </div>
+                                ) : (
+                                  <img src={getStorageUrl(path)} alt="Visuel 3D" className="w-full h-20 object-cover rounded-lg" />
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveExistingFile('remove_render_3d', path)}
+                                  className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-[rgb(var(--clay))] text-white text-xs"
+                                >
+                                  x
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Type</label>
-                  <select
-                    name="project_type"
-                    value={formData.project_type}
-                    onChange={handleChange}
-                    className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
-                  >
-                    <option value="immobilier">Immobilier</option>
-                    <option value="construction">Construction</option>
-                    <option value="renovation">Renovation</option>
-                  </select>
+
+                <div className="space-y-4 lg:sticky lg:top-6">
+                  <div className="surface-panel p-5 space-y-4">
+                    <p className="text-xs font-medium uppercase tracking-wide text-[rgba(15,42,46,0.5)]">Apercu du projet</p>
+                    <div className="flex items-center gap-3">
+                      <div className="h-11 w-11 shrink-0 rounded-xl bg-[rgba(15,42,46,0.08)] flex items-center justify-center overflow-hidden">
+                        {imageFiles[0] ? (
+                          <img src={URL.createObjectURL(imageFiles[0])} alt="" className="h-full w-full object-cover" />
+                        ) : Array.isArray(editingProject?.images_path) && editingProject.images_path[0] ? (
+                          <img src={getStorageUrl(editingProject.images_path[0])} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <TrendingUp className="h-5 w-5 text-[rgba(15,42,46,0.4)]" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-[rgb(var(--ink))] truncate">{formData.title || 'Titre du projet'}</p>
+                        <p className="text-xs text-[rgba(15,42,46,0.55)] truncate">{formData.city || formData.location || 'Localisation non definie'}</p>
+                      </div>
+                    </div>
+                    <p className="text-2xl font-semibold text-[rgb(var(--ink))]">
+                      {formData.total_investment ? Number(formData.total_investment).toLocaleString() : 'N/A'}
+                    </p>
+                    {formData.min_investment && (
+                      <p className="text-xs text-[rgba(15,42,46,0.6)]">Ticket min : {Number(formData.min_investment).toLocaleString()}</p>
+                    )}
+                  </div>
+
+                  <div className="surface-panel p-5 space-y-2.5">
+                    <button type="submit" disabled={saving} className="btn-primary w-full justify-center">
+                      <Save className="h-4 w-4" />
+                      {saving ? 'Enregistrement...' : editingProject ? 'Enregistrer les modifications' : 'Creer le projet'}
+                    </button>
+                    {editingProject && (
+                      <button type="button" onClick={resetForm} className="btn-ghost w-full justify-center">
+                        Annuler
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Ville</label>
-                  <input
-                    name="city"
-                    value={formData.city}
-                    onChange={handleChange}
-                    className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Localisation</label>
-                  <input
-                    name="location"
-                    value={formData.location}
-                    onChange={handleChange}
-                    className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Investissement total</label>
-                  <input
-                    type="number"
-                    name="total_investment"
-                    value={formData.total_investment}
-                    onChange={handleChange}
-                    className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Ticket minimum</label>
-                  <input
-                    type="number"
-                    name="min_investment"
-                    value={formData.min_investment}
-                    onChange={handleChange}
-                    className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Rendement attendu (%)</label>
-                  <input
-                    type="number"
-                    name="expected_return"
-                    value={formData.expected_return}
-                    onChange={handleChange}
-                    className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Duree (mois)</label>
-                  <input
-                    type="number"
-                    name="duration_months"
-                    value={formData.duration_months}
-                    onChange={handleChange}
-                    className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Date de debut</label>
-                  <input
-                    type="date"
-                    name="start_date"
-                    value={formData.start_date}
-                    onChange={handleChange}
-                    className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Date de fin</label>
-                  <input
-                    type="date"
-                    name="end_date"
-                    value={formData.end_date}
-                    onChange={handleChange}
-                    className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Statut</label>
-                  <select
-                    name="status"
-                    value={formData.status}
-                    onChange={handleChange}
-                    className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
-                  >
-                    <option value="open">Ouvert</option>
-                    <option value="in_progress">En cours</option>
-                    <option value="closed">Ferme</option>
-                    <option value="completed">Termine</option>
-                  </select>
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium mb-2">Documents</label>
-                  <input
-                    type="file"
-                    multiple
-                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
-                    onChange={handleDocumentFiles}
-                    className="w-full text-sm"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium mb-2">Images standards</label>
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*"
-                    onChange={handleImageFiles}
-                    className="w-full text-sm"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium mb-2">Plans de construction</label>
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*,.pdf"
-                    onChange={handlePlanFiles}
-                    className="w-full text-sm"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium mb-2">Representations 3D</label>
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*,.pdf"
-                    onChange={handleRender3DFiles}
-                    className="w-full text-sm"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium mb-2">Description</label>
-                  <textarea
-                    name="description"
-                    value={formData.description}
-                    onChange={handleChange}
-                    rows="4"
-                    className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-3">
-                {editingProject && (
-                  <button type="button" className="btn-ghost" onClick={resetForm}>
-                    Annuler
-                  </button>
-                )}
-                <button type="submit" className="btn-primary" disabled={saving}>
-                  <Save className="h-4 w-4" />
-                  {saving ? 'Enregistrement...' : 'Enregistrer'}
-                </button>
               </div>
             </form>
 

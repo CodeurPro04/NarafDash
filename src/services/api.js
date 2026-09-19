@@ -473,6 +473,7 @@ export const agentService = {
     }),
   getAllProperties: (params) => api.get("/v1/agent/properties/all", { params }),
   updateProperty: (uuid, data) => apiUpdate(`/v1/agent/properties/${uuid}`, data),
+  deletePropertyMedia: (id) => api.delete(`/v1/agent/properties/media/${id}`),
 
   // Messages clients
   getMessages: () => api.get("/v1/agent/messages"),

@@ -243,6 +243,21 @@ const Sidebar = () => {
           { path: '/agent/search-requests', search: 'view=history', icon: FileText, label: 'Historique des demandes' },
         ],
       };
+      const agentConstructionGroup = {
+        label: 'Construction',
+        icon: HardHat,
+        children: [
+          { path: '/agent/construction', icon: FileText, label: 'Projets assignes' },
+          { path: '/agent/construction-publications', icon: HardHat, label: 'Mes publications' },
+        ],
+      };
+      const agentInvestmentGroup = {
+        label: 'Investissement',
+        icon: TrendingUp,
+        children: [
+          { path: '/agent/investment-publications', icon: TrendingUp, label: 'Mes publications' },
+        ],
+      };
       const baseItems = [
         { section: 'Pilotage' },
         { path: '/agent/dashboard', icon: LayoutDashboard, label: 'Tableau de bord' },
@@ -253,6 +268,7 @@ const Sidebar = () => {
           { section: workspaceHeader },
           ...baseItems,
           { section: 'Domaines metier' },
+          agentConstructionGroup,
           agentClientGroup,
           agentSearchGroup,
           { section: 'Communication' },
@@ -267,6 +283,7 @@ const Sidebar = () => {
           { section: workspaceHeader },
           ...baseItems,
           { section: 'Domaines metier' },
+          agentInvestmentGroup,
           agentClientGroup,
           agentSearchGroup,
           { section: 'Communication' },

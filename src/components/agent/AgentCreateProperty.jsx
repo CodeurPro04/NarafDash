@@ -2,9 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
-import { agentService, propertyTypeService } from '../../services/api';
-import { Building, Upload, MapPin, FileText, ArrowLeft, Save } from 'lucide-react';
+import { agentService, propertyTypeService, countryService } from '../../services/api';
+import { Upload, MapPin, ArrowLeft, Save, LocateFixed, Map as MapIcon } from 'lucide-react';
 import { getTypeRules, resetHiddenFields } from '../../utils/propertyTypeRules';
+import { useAddressLocation } from '../../hooks/useAddressLocation';
 
 const AgentCreateProperty = () => {
   const navigate = useNavigate();
@@ -14,6 +15,7 @@ const AgentCreateProperty = () => {
   const [error, setError] = useState('');
   const [types, setTypes] = useState([]);
   const [features, setFeatures] = useState([]);
+  const [countries, setCountries] = useState([]);
   const [images, setImages] = useState([]);
   const [planImages, setPlanImages] = useState([]);
   const [render3DImages, setRender3DImages] = useState([]);
@@ -41,7 +43,20 @@ const AgentCreateProperty = () => {
     quartier: '',
     latitude: '',
     longitude: '',
+    country_id: '',
     feature_ids: [],
+  });
+
+  const locationPicker = useAddressLocation({
+    onResolved: ({ address, city, lat, lng }) => {
+      setFormData((prev) => ({
+        ...prev,
+        address,
+        city: prev.city || city,
+        latitude: Number.isFinite(lat) ? lat : prev.latitude,
+        longitude: Number.isFinite(lng) ? lng : prev.longitude,
+      }));
+    },
   });
 
   useEffect(() => {
@@ -52,14 +67,17 @@ const AgentCreateProperty = () => {
 
   const loadLookupData = async () => {
     try {
-      const [typesRes, featuresRes] = await Promise.all([
+      const [typesRes, featuresRes, countriesRes] = await Promise.all([
         propertyTypeService.getAll(),
         propertyTypeService.getFeatures(),
+        countryService.getAll(),
       ]);
       const typesPayload = extractPayload(typesRes);
       const featuresPayload = extractPayload(featuresRes);
+      const countriesPayload = extractPayload(countriesRes);
       setTypes(Array.isArray(typesPayload) ? typesPayload : typesPayload.data || []);
       setFeatures(Array.isArray(featuresPayload) ? featuresPayload : featuresPayload.data || []);
+      setCountries(Array.isArray(countriesPayload) ? countriesPayload : countriesPayload.data || []);
     } catch (err) {
       console.error('Erreur lors du chargement des types:', err);
     }
@@ -241,10 +259,13 @@ const AgentCreateProperty = () => {
 
             <form onSubmit={handleSubmit} className="space-y-8">
               <div className="surface-panel p-6 space-y-6">
-                <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Informations generales
-                </h2>
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-[rgb(var(--ink))] text-white flex items-center justify-center text-sm font-semibold shrink-0">1</div>
+                  <div>
+                    <h2 className="text-lg font-semibold">Informations generales</h2>
+                    <p className="text-xs text-[rgba(15,42,46,0.55)]">Titre, type de bien et tarification</p>
+                  </div>
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -349,10 +370,13 @@ const AgentCreateProperty = () => {
               </div>
 
               <div className="surface-panel p-6 space-y-6">
-                <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <Building className="h-5 w-5" />
-                  Caracteristiques
-                </h2>
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-[rgb(var(--ink))] text-white flex items-center justify-center text-sm font-semibold shrink-0">2</div>
+                  <div>
+                    <h2 className="text-lg font-semibold">Caracteristiques</h2>
+                    <p className="text-xs text-[rgba(15,42,46,0.55)]">Surfaces, pieces et equipements specifiques</p>
+                  </div>
+                </div>
 
                 {activeRules.hint && (
                   <p className="text-sm text-[rgba(15,42,46,0.6)] bg-[rgba(15,42,46,0.04)] px-4 py-3 rounded-xl">
@@ -385,59 +409,99 @@ const AgentCreateProperty = () => {
               </div>
 
               <div className="surface-panel p-6 space-y-6">
-                <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <MapPin className="h-5 w-5" />
-                  Localisation
-                </h2>
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-[rgb(var(--ink))] text-white flex items-center justify-center text-sm font-semibold shrink-0">3</div>
+                  <div>
+                    <h2 className="text-lg font-semibold">Localisation</h2>
+                    <p className="text-xs text-[rgba(15,42,46,0.55)]">Adresse et reperes geographiques</p>
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Adresse *</label>
-                    <input
-                      type="text"
-                      name="address"
-                      value={formData.address}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
-                    />
+                  <div className="md:col-span-2 relative">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                      <label className="block text-sm font-medium">Adresse *</label>
+                      <div className="flex items-center gap-3 text-xs">
+                        <button
+                          type="button"
+                          onClick={locationPicker.locateMe}
+                          disabled={locationPicker.locating}
+                          className="inline-flex items-center gap-1 font-medium text-[rgb(var(--clay))] hover:underline disabled:opacity-50"
+                        >
+                          <LocateFixed className="h-3.5 w-3.5" />
+                          {locationPicker.locating ? 'Localisation...' : 'Me localiser'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => locationPicker.setShowMap((prev) => !prev)}
+                          className="inline-flex items-center gap-1 font-medium text-[rgb(var(--ink))] hover:underline"
+                        >
+                          <MapIcon className="h-3.5 w-3.5" />
+                          {locationPicker.showMap ? 'Masquer la carte' : 'Choisir sur la carte'}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        name="address"
+                        value={formData.address}
+                        onChange={(event) => { handleInputChange(event); locationPicker.handleInputChange(event.target.value); }}
+                        onFocus={() => formData.address.trim().length >= 3 && locationPicker.fetchSuggestions(formData.address.trim())}
+                        onBlur={() => setTimeout(() => locationPicker.clearSuggestions(), 150)}
+                        required
+                        autoComplete="off"
+                        placeholder="Ex. Boulevard de la Marina, Cotonou"
+                        className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
+                      />
+                      {locationPicker.loadingSuggestions && (
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-[rgba(15,42,46,0.4)]">...</span>
+                      )}
+                      {locationPicker.suggestions.length > 0 && (
+                        <div className="surface-card absolute z-20 mt-1.5 w-full max-h-56 overflow-y-auto p-1.5">
+                          {locationPicker.suggestions.map((item) => (
+                            <button
+                              key={item.place_id}
+                              type="button"
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={() => locationPicker.selectSuggestion(item)}
+                              className="w-full flex items-start gap-2 text-left px-3 py-2 rounded-lg text-xs hover:bg-[rgba(15,42,46,0.05)] transition-colors"
+                            >
+                              <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0 text-[rgba(15,42,46,0.4)]" />
+                              <span className="text-[rgba(15,42,46,0.75)]">{item.display_name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {locationPicker.geoError && <p className="text-xs text-[rgb(var(--clay))] mt-2">{locationPicker.geoError}</p>}
+                    {locationPicker.showMap && (
+                      <div className="mt-3 rounded-xl overflow-hidden border border-[rgb(var(--line))]">
+                        <div ref={locationPicker.mapContainerRef} className="h-56 w-full" />
+                        <div className="px-3 py-2 bg-[rgba(15,42,46,0.03)] text-[11px] text-[rgba(15,42,46,0.6)] flex items-center justify-between gap-2">
+                          <span>Cliquez sur la carte ou deplacez le repere pour ajuster la position.</span>
+                          {locationPicker.reverseGeocoding && <span className="shrink-0">Recherche de l'adresse...</span>}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Ville *</label>
-                    <input
-                      type="text"
-                      name="city"
-                      value={formData.city}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Commune</label>
-                    <input
-                      type="text"
-                      name="commune"
-                      value={formData.commune}
-                      onChange={handleInputChange}
-                      className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Quartier</label>
-                    <input
-                      type="text"
-                      name="quartier"
-                      value={formData.quartier}
-                      onChange={handleInputChange}
-                      className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
-                    />
-                  </div>
+                  <input type="text" name="city" value={formData.city} onChange={handleInputChange} required placeholder="Ville *" className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]" />
+                  <select name="country_id" value={formData.country_id} onChange={handleInputChange} className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]">
+                    <option value="">Pays (optionnel)</option>
+                    {countries.map((country) => (
+                      <option key={country.id} value={country.id}>{country.flag ? `${country.flag} ` : ''}{country.name}</option>
+                    ))}
+                  </select>
+                  <input type="text" name="commune" value={formData.commune} onChange={handleInputChange} placeholder="Commune" className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]" />
+                  <input type="text" name="quartier" value={formData.quartier} onChange={handleInputChange} placeholder="Quartier" className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]" />
                 </div>
               </div>
 
               {activeRules.showFeatures && features.length > 0 && (
                 <div className="surface-panel p-6 space-y-6">
-                  <h2 className="text-lg font-semibold">Equipements</h2>
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 rounded-full bg-[rgb(var(--ink))] text-white flex items-center justify-center text-sm font-semibold shrink-0">4</div>
+                    <h2 className="text-lg font-semibold">Equipements</h2>
+                  </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {features.map((feature) => (
                       <label key={feature.id} className="flex items-center gap-2 text-sm">
@@ -455,10 +519,13 @@ const AgentCreateProperty = () => {
               )}
 
               <div className="surface-panel p-6 space-y-6">
-                <h2 className="text-lg font-semibold flex items-center gap-2">
-                  <Upload className="h-5 w-5" />
-                  Visuels du projet
-                </h2>
+                <div className="flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-[rgb(var(--ink))] text-white flex items-center justify-center text-sm font-semibold shrink-0">{activeRules.showFeatures && features.length > 0 ? 5 : 4}</div>
+                  <div>
+                    <h2 className="text-lg font-semibold">Visuels du projet</h2>
+                    <p className="text-xs text-[rgba(15,42,46,0.55)]">Photos, plans et rendus 3D</p>
+                  </div>
+                </div>
                 <p className="text-sm text-[rgba(15,42,46,0.6)]">
                   Ajoutez les visuels dans cet ordre : <span className="font-medium text-[rgb(var(--ink))]">Images standards *</span>, <span className="font-medium text-[rgb(var(--ink))]">Plans de construction</span> et <span className="font-medium text-[rgb(var(--ink))]">Representations 3D</span>.
                 </p>
