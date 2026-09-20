@@ -4,15 +4,14 @@ import Sidebar from '../common/Sidebar';
 import { profileService } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { Save, Lock, UserCircle } from 'lucide-react';
+import { useToast } from '../common/Toast';
 
 const OwnerProfile = () => {
   const { user, updateUser } = useAuth();
+  const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [passwordMessage, setPasswordMessage] = useState('');
   const [profileData, setProfileData] = useState({
     first_name: '',
     last_name: '',
@@ -33,7 +32,6 @@ const OwnerProfile = () => {
   const loadProfile = async () => {
     try {
       setLoading(true);
-      setError('');
       const response = await profileService.getProfile();
       const payload = response?.data?.data?.user || response?.data?.user;
       if (payload) {
@@ -46,7 +44,7 @@ const OwnerProfile = () => {
       }
     } catch (err) {
       console.error('Erreur lors du chargement du profil:', err);
-      setError(err.response?.data?.message || 'Impossible de charger le profil.');
+      toast.error(err.response?.data?.message || 'Impossible de charger le profil.');
     } finally {
       setLoading(false);
     }
@@ -65,8 +63,6 @@ const OwnerProfile = () => {
   const handleProfileSubmit = async (e) => {
     e.preventDefault();
     setSavingProfile(true);
-    setError('');
-    setSuccess('');
     try {
       const payload = new FormData();
       payload.append('first_name', profileData.first_name);
@@ -83,12 +79,12 @@ const OwnerProfile = () => {
           ...updated,
         });
       }
-      setSuccess('Profil mis a jour avec succes.');
+      toast.success('Profil mis a jour avec succes.');
     } catch (err) {
       console.error('Erreur lors de la mise a jour du profil:', err);
       const apiErrors = err.response?.data?.errors;
       const details = apiErrors ? Object.values(apiErrors).flat().join(' ') : '';
-      setError(err.response?.data?.message || details || 'Erreur lors de la mise a jour du profil.');
+      toast.error(err.response?.data?.message || details || 'Erreur lors de la mise a jour du profil.');
     } finally {
       setSavingProfile(false);
     }
@@ -97,10 +93,9 @@ const OwnerProfile = () => {
   const handlePasswordSubmit = async (e) => {
     e.preventDefault();
     setSavingPassword(true);
-    setPasswordMessage('');
     try {
       await profileService.changePassword(passwordData);
-      setPasswordMessage('Mot de passe mis a jour avec succes.');
+      toast.success('Mot de passe mis a jour avec succes.');
       setPasswordData({
         current_password: '',
         new_password: '',
@@ -110,7 +105,7 @@ const OwnerProfile = () => {
       console.error('Erreur lors du changement de mot de passe:', err);
       const apiErrors = err.response?.data?.errors;
       const details = apiErrors ? Object.values(apiErrors).flat().join(' ') : '';
-      setPasswordMessage(err.response?.data?.message || details || 'Erreur lors du changement de mot de passe.');
+      toast.error(err.response?.data?.message || details || 'Erreur lors du changement de mot de passe.');
     } finally {
       setSavingPassword(false);
     }
@@ -135,13 +130,6 @@ const OwnerProfile = () => {
               <div className="surface-panel p-6 text-sm text-[rgba(15,42,46,0.6)]">Chargement...</div>
             ) : (
               <>
-                {error && (
-                  <div className="surface-panel p-4 text-sm text-[rgb(var(--clay))]">{error}</div>
-                )}
-                {success && (
-                  <div className="surface-panel p-4 text-sm text-[rgb(var(--sage))]">{success}</div>
-                )}
-
                 <form onSubmit={handleProfileSubmit} className="surface-panel p-6 space-y-6">
                   <div className="flex items-center gap-3">
                     <UserCircle className="h-5 w-5" />
@@ -213,9 +201,6 @@ const OwnerProfile = () => {
                     <Lock className="h-5 w-5" />
                     <h2 className="text-lg font-semibold">Mot de passe</h2>
                   </div>
-                  {passwordMessage && (
-                    <div className="text-sm text-[rgb(var(--clay))]">{passwordMessage}</div>
-                  )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium mb-2">Mot de passe actuel</label>

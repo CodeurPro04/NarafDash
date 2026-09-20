@@ -25,6 +25,8 @@ import {
   Package,
   Video,
   Activity,
+  Megaphone,
+  Wallet,
 } from 'lucide-react';
 
 const SYSTEM_STATUS_POLL_MS = 45000;
@@ -193,6 +195,7 @@ const Sidebar = () => {
         ],
       },
       { path: '/admin/presentation-video', icon: Video, label: 'Videos de presentation' },
+      { path: '/admin/nav-ads', icon: Megaphone, label: 'Publicite' },
       { section: 'Relations' },
       { path: '/admin/messages', icon: MessageSquare, label: 'Messages' },
       { path: '/admin/partnerships', icon: Handshake, label: 'Partenariats' },
@@ -208,6 +211,7 @@ const Sidebar = () => {
       { section: 'Domaines metier' },
       ...managerGroups,
       { section: 'Relations' },
+      { path: '/manager/messages', icon: MessageSquare, label: 'Messages' },
       { path: '/manager/reports', icon: BarChart3, label: 'Rapports' },
       { section: 'Parametres' },
       { path: '/manager/profile', icon: Shield, label: 'Profil' },
@@ -256,6 +260,7 @@ const Sidebar = () => {
         icon: TrendingUp,
         children: [
           { path: '/agent/investment-publications', icon: TrendingUp, label: 'Mes publications' },
+          { path: '/agent/investment-proposals', icon: Wallet, label: 'Propositions recues' },
         ],
       };
       const baseItems = [

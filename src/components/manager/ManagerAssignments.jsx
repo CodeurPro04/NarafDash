@@ -6,8 +6,10 @@ import { adminService, managerService } from '../../services/api';
 import ClientRequestDomainSections from '../admin/ClientRequestDomainSections';
 import { useAuth } from '../../contexts/AuthContext';
 import { UserCheck, FileText, HardHat, CheckCircle, XCircle, Home, Search, ChevronLeft, ChevronRight, Clock, Users, X, UserCog } from 'lucide-react';
+import { useToast } from '../common/Toast';
 
 const ManagerAssignments = () => {
+  const toast = useToast();
   const [agents, setAgents] = useState([]);
   const [searchRequests, setSearchRequests] = useState([]);
   const [constructionRequests, setConstructionRequests] = useState([]);
@@ -511,7 +513,7 @@ const ManagerAssignments = () => {
   const handleAssign = async (type, uuid) => {
     const agentId = assignments[uuid];
     if (!agentId) {
-      alert('Veuillez selectionner un agent');
+      toast.warning('Veuillez selectionner un agent');
       return;
     }
 
@@ -533,9 +535,10 @@ const ManagerAssignments = () => {
         setPropertyRequests((prev) => prev.filter((item) => item.uuid !== uuid));
       }
       await refreshData();
+      toast.success('Dossier assigné avec succès.');
     } catch (error) {
       console.error('Erreur lors de l\'assignation:', error);
-      alert('Erreur lors de l\'assignation');
+      toast.error('Erreur lors de l\'assignation');
     }
   };
 
@@ -543,24 +546,26 @@ const ManagerAssignments = () => {
     try {
       await assignmentService.approveClientRequest(uuid);
       await refreshData();
+      toast.success('Demande approuvée avec succès.');
     } catch (error) {
       console.error('Erreur lors de la decision:', error);
-      alert('Erreur lors de la decision');
+      toast.error('Erreur lors de la decision');
     }
   };
 
   const handleAssignDomainClientRequest = async (uuid) => {
     const agentId = assignments[uuid];
     if (!agentId) {
-      alert('Veuillez selectionner un agent');
+      toast.warning('Veuillez selectionner un agent');
       return;
     }
     try {
       await assignmentService.assignClientRequest(uuid, { agent_id: agentId });
       await refreshData();
+      toast.success('Dossier assigné avec succès.');
     } catch (error) {
       console.error('Erreur lors de l assignation:', error);
-      alert(error.response?.data?.message || 'Erreur lors de l assignation');
+      toast.error(error.response?.data?.message || 'Erreur lors de l assignation');
     }
   };
 
@@ -595,9 +600,10 @@ const ManagerAssignments = () => {
         }
       }
       await refreshData();
+      toast.success(decision === 'approve' ? 'Demande approuvée avec succès.' : 'Demande rejetée avec succès.');
     } catch (error) {
       console.error('Erreur lors de la decision:', error);
-      alert('Erreur lors de la decision');
+      toast.error('Erreur lors de la decision');
     }
   };
 
@@ -605,7 +611,7 @@ const ManagerAssignments = () => {
     if (!rejectModal.item?.uuid) return;
     const reason = rejectModal.reason.trim();
     if (rejectModal.type === 'construction' && !reason) {
-      alert('Motif obligatoire.');
+      toast.warning('Motif obligatoire.');
       return;
     }
     try {
@@ -620,9 +626,10 @@ const ManagerAssignments = () => {
       }
       await refreshData();
       setRejectModal({ open: false, type: null, item: null, reason: '' });
+      toast.success('Demande rejetée avec succès.');
     } catch (error) {
       console.error('Erreur lors du rejet:', error);
-      alert('Erreur lors du rejet');
+      toast.error('Erreur lors du rejet');
     }
   };
 

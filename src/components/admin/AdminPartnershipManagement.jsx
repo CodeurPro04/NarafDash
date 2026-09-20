@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
+import { useToast } from '../common/Toast';
 import { adminService } from '../../services/api';
 import { CheckCircle, XCircle, Building2, Mail, Phone, MapPin } from 'lucide-react';
 
 const AdminPartnershipManagement = () => {
+  const toast = useToast();
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [filter, setFilter] = useState('pending');
   const [selected, setSelected] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
@@ -47,7 +48,6 @@ const AdminPartnershipManagement = () => {
   const loadApplications = async ({ silent = false } = {}) => {
     try {
       if (!silent) setLoading(true);
-      setError('');
       const response = await adminService.getAllPartnerships({
         status: filter !== 'all' ? filter : undefined,
         per_page: 100,
@@ -61,7 +61,7 @@ const AdminPartnershipManagement = () => {
       });
     } catch (err) {
       console.error('Erreur chargement partenariats:', err);
-      setError('Impossible de charger les demandes.');
+      toast.error('Impossible de charger les demandes.');
     } finally {
       if (!silent) setLoading(false);
     }
@@ -96,9 +96,10 @@ const AdminPartnershipManagement = () => {
     try {
       await adminService.approvePartnership(selected.uuid);
       await loadApplications({ silent: true });
+      toast.success('Partenariat validé avec succès.');
     } catch (err) {
       console.error('Erreur validation partenariat:', err);
-      setError('Erreur lors de la validation.');
+      toast.error('Erreur lors de la validation.');
     }
   };
 
@@ -109,25 +110,27 @@ const AdminPartnershipManagement = () => {
       await adminService.deletePartnership(selected.uuid);
       setApplications((prev) => prev.filter((item) => item.uuid != selected.uuid));
       setSelected(null);
+      toast.success('Partenariat supprimé avec succès.');
     } catch (err) {
       console.error('Erreur suppression partenariat:', err);
-      setError('Erreur lors de la suppression.');
+      toast.error('Erreur lors de la suppression.');
     }
   };
 
   const handleReject = async () => {
     if (!selected?.uuid) return;
     if (!rejectReason.trim()) {
-      setError('Veuillez saisir un motif de rejet.');
+      toast.warning('Veuillez saisir un motif de rejet.');
       return;
     }
     try {
       await adminService.rejectPartnership(selected.uuid, { rejection_reason: rejectReason.trim() });
       setRejectReason('');
       await loadApplications({ silent: true });
+      toast.success('Partenariat rejeté avec succès.');
     } catch (err) {
       console.error('Erreur rejet partenariat:', err);
-      setError('Erreur lors du rejet.');
+      toast.error('Erreur lors du rejet.');
     }
   };
 
@@ -160,7 +163,6 @@ const AdminPartnershipManagement = () => {
     if (!selected?.uuid) return;
     try {
       setContentSaving(true);
-      setError('');
 
       const payload = new FormData();
       payload.append('profile_title', contentForm.profile_title || '');
@@ -190,13 +192,14 @@ const AdminPartnershipManagement = () => {
       setSelected(data);
       setCoverFile(null);
       setRemoveCoverImage(false);
+      toast.success('Contenu public du partenaire mis à jour avec succès.');
     } catch (err) {
       console.error('Erreur mise a jour contenu partenaire:', err);
       const apiMessage =
         err?.response?.data?.message ||
         Object.values(err?.response?.data?.errors || {})?.[0]?.[0] ||
         'Impossible de sauvegarder le contenu public du partenaire.';
-      setError(apiMessage);
+      toast.error(apiMessage);
     } finally {
       setContentSaving(false);
     }
@@ -216,10 +219,6 @@ const AdminPartnershipManagement = () => {
                 Traitez les demandes de partenariat et suivez les dossiers.
               </p>
             </div>
-
-            {error && (
-              <div className="surface-panel p-4 text-sm text-[rgb(var(--clay))]">{error}</div>
-            )}
 
             {/* Filtres */}
             <div className="flex gap-2 flex-wrap">
@@ -271,7 +270,10 @@ const AdminPartnershipManagement = () => {
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
                                 <p className="text-sm font-semibold truncate">{item.company_name}</p>
-                                <p className="text-xs text-[rgba(15,42,46,0.5)]">{item.company_type || 'Entreprise'}</p>
+                                <p className="text-xs text-[rgba(15,42,46,0.5)]">
+                                  {item.company_type || 'Entreprise'}
+                                  {item.legal_specialty ? ` · ${item.legal_specialty}` : ''}
+                                </p>
                               </div>
                               <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${statusInfo(item.status).className}`}>
                                 {statusInfo(item.status).label}
@@ -306,7 +308,10 @@ const AdminPartnershipManagement = () => {
                         )}
                         <div>
                           <h2 className="text-xl font-semibold">{selected.company_name}</h2>
-                          <p className="text-sm text-[rgba(15,42,46,0.6)]">{selected.company_type}</p>
+                          <p className="text-sm text-[rgba(15,42,46,0.6)]">
+                            {selected.company_type}
+                            {selected.legal_specialty ? ` · ${selected.legal_specialty}` : ''}
+                          </p>
                           <span className={`inline-flex mt-2 text-xs font-semibold px-2 py-1 rounded-full ${statusInfo(selected.status).className}`}>
                             {statusInfo(selected.status).label}
                           </span>

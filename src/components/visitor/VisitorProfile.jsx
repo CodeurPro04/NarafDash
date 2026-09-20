@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import Header from '../common/Header';
 import { visitorService, propertyTypeService } from '../../services/api';
 import { FileText, HardHat, Mail, Send } from 'lucide-react';
+import { useToast } from '../common/Toast';
 
 const VisitorProfile = () => {
+  const toast = useToast();
   const [tab, setTab] = useState('requests');
   const [searchRequests, setSearchRequests] = useState([]);
   const [constructionRequests, setConstructionRequests] = useState([]);
@@ -81,6 +83,7 @@ const VisitorProfile = () => {
   const submitSearch = async () => {
     if (!searchForm.transaction_type) {
       setError('Veuillez préciser le type de transaction recherché.');
+      toast.warning('Veuillez préciser le type de transaction recherché.');
       return;
     }
     try {
@@ -109,11 +112,14 @@ const VisitorProfile = () => {
         additional_requirements: '',
       });
       await loadData({ silent: true });
+      toast.success('Demande de recherche envoyée avec succès.');
     } catch (err) {
       console.error('Erreur creation recherche:', err);
       const apiErrors = err.response?.data?.errors;
       const details = apiErrors ? Object.values(apiErrors).flat().join(' ') : '';
-      setError(err.response?.data?.message || details || 'Erreur lors de la demande de recherche.');
+      const message = err.response?.data?.message || details || 'Erreur lors de la demande de recherche.';
+      setError(message);
+      toast.error(message);
     } finally {
       setSavingSearch(false);
     }
@@ -122,6 +128,7 @@ const VisitorProfile = () => {
   const submitConstruction = async () => {
     if (!constructionForm.description) {
       setError('Veuillez renseigner la description du projet.');
+      toast.warning('Veuillez renseigner la description du projet.');
       return;
     }
     try {
@@ -138,11 +145,14 @@ const VisitorProfile = () => {
         city: '',
       });
       await loadData({ silent: true });
+      toast.success('Demande de construction envoyée avec succès.');
     } catch (err) {
       console.error('Erreur creation construction:', err);
       const apiErrors = err.response?.data?.errors;
       const details = apiErrors ? Object.values(apiErrors).flat().join(' ') : '';
-      setError(err.response?.data?.message || details || 'Erreur lors de la demande de construction.');
+      const message = err.response?.data?.message || details || 'Erreur lors de la demande de construction.';
+      setError(message);
+      toast.error(message);
     } finally {
       setSavingConstruction(false);
     }
@@ -155,9 +165,12 @@ const VisitorProfile = () => {
       setReplyingTo(null);
       setReplyText('');
       await loadData({ silent: true });
+      toast.success('Réponse envoyée avec succès.');
     } catch (err) {
       console.error('Erreur lors de la reponse:', err);
-      setError(err.response?.data?.message || 'Erreur lors de la reponse.');
+      const message = err.response?.data?.message || 'Erreur lors de la reponse.';
+      setError(message);
+      toast.error(message);
     }
   };
 

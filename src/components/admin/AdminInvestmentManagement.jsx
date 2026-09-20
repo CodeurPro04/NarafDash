@@ -2,10 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
-import { adminService, managerService, countryService } from '../../services/api';
+import { adminService, managerService, countryService, partnershipLookupService } from '../../services/api';
 import ClientRequestDomainSections from './ClientRequestDomainSections';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAddressLocation } from '../../hooks/useAddressLocation';
+import { useToast } from '../common/Toast';
 import {
   Save, Trash2, Plus, Search, Clock, UserCheck, CheckCircle, Users, X, ChevronLeft, ChevronRight,
   FileText, Handshake, XCircle, TrendingUp, Eye, ShieldCheck, LocateFixed, Map as MapIcon, Image, Upload,
@@ -16,6 +17,7 @@ const LIST_PAGE_SIZE = 12;
 
 const AdminInvestmentManagement = () => {
   const { user } = useAuth();
+  const toast = useToast();
   const location = useLocation();
   const navigate = useNavigate();
   const viewParam = new URLSearchParams(location.search).get('view');
@@ -30,7 +32,6 @@ const AdminInvestmentManagement = () => {
   const [assignments, setAssignments] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
   const [editingProject, setEditingProject] = useState(null);
   const [existingDocuments, setExistingDocuments] = useState([]);
   const [existingImages, setExistingImages] = useState([]);
@@ -87,10 +88,12 @@ const AdminInvestmentManagement = () => {
     render_3d_path: '',
     description: '',
     country_id: '',
+    partner_id: '',
     latitude: '',
     longitude: '',
   });
   const [countries, setCountries] = useState([]);
+  const [partners, setPartners] = useState([]);
 
   const projectTypeOptions = [
     { value: 'immobilier', label: 'Immobilier' },
@@ -220,9 +223,10 @@ const AdminInvestmentManagement = () => {
     try {
       await service.updateInvestment(editingProject.uuid, { remove_documents: [path] });
       setExistingDocuments((prev) => prev.filter((item) => item != path));
+      toast.success('Document supprimé avec succès.');
     } catch (err) {
       console.error('Erreur lors de la suppression du document:', err);
-      setError('Erreur lors de la suppression du document.');
+      toast.error('Erreur lors de la suppression du document.');
     }
   };
 
@@ -232,9 +236,10 @@ const AdminInvestmentManagement = () => {
     try {
       await service.updateInvestment(editingProject.uuid, { remove_images: [path] });
       setExistingImages((prev) => prev.filter((item) => item != path));
+      toast.success('Image supprimée avec succès.');
     } catch (err) {
       console.error("Erreur lors de la suppression de l'image:", err);
-      setError("Erreur lors de la suppression de l'image.");
+      toast.error("Erreur lors de la suppression de l'image.");
     }
   };
 
@@ -244,9 +249,10 @@ const AdminInvestmentManagement = () => {
     try {
       await service.updateInvestment(editingProject.uuid, { remove_plans: [path] });
       setExistingPlans((prev) => prev.filter((item) => item != path));
+      toast.success('Plan supprimé avec succès.');
     } catch (err) {
       console.error('Erreur lors de la suppression du plan:', err);
-      setError('Erreur lors de la suppression du plan.');
+      toast.error('Erreur lors de la suppression du plan.');
     }
   };
 
@@ -256,9 +262,10 @@ const AdminInvestmentManagement = () => {
     try {
       await service.updateInvestment(editingProject.uuid, { remove_render_3d: [path] });
       setExistingRender3D((prev) => prev.filter((item) => item != path));
+      toast.success('Visuel 3D supprimé avec succès.');
     } catch (err) {
       console.error('Erreur lors de la suppression du visuel 3D:', err);
-      setError('Erreur lors de la suppression du visuel 3D.');
+      toast.error('Erreur lors de la suppression du visuel 3D.');
     }
   };
 
@@ -272,6 +279,12 @@ const AdminInvestmentManagement = () => {
         setCountries(Array.isArray(payload) ? payload : payload.data || []);
       })
       .catch((err) => console.error('Erreur chargement pays:', err));
+    partnershipLookupService.getApproved('investisseur')
+      .then((res) => {
+        const payload = res?.data?.data ?? res?.data ?? [];
+        setPartners(Array.isArray(payload) ? payload : payload.data || []);
+      })
+      .catch((err) => console.error('Erreur chargement partenaires:', err));
   }, []);
 
   useEffect(() => {
@@ -310,6 +323,7 @@ const AdminInvestmentManagement = () => {
         render_3d_path: '',
         description: '',
         country_id: '',
+        partner_id: '',
     latitude: '',
     longitude: '',
       });
@@ -347,7 +361,6 @@ const AdminInvestmentManagement = () => {
   const loadProjects = async ({ silent = false } = {}) => {
     try {
       if (!silent) setLoading(true);
-      setError('');
       const [projectsResponse, agentsResponse, pendingClientResponse, clientHistoryResponse] = await Promise.all([
         service.getInvestments({ per_page: 100 }),
         service.getAvailableAgents(),
@@ -365,7 +378,7 @@ const AdminInvestmentManagement = () => {
       setClientHistory(Array.isArray(clientHistoryPayload.data || clientHistoryPayload) ? (clientHistoryPayload.data || clientHistoryPayload) : []);
     } catch (err) {
       console.error('Erreur lors du chargement des projets:', err);
-      setError('Impossible de charger les projets.');
+      toast.error('Impossible de charger les projets.');
     } finally {
       if (!silent) setLoading(false);
     }
@@ -447,6 +460,7 @@ const AdminInvestmentManagement = () => {
       render_3d_path: Array.isArray(project.render_3d_path) ? project.render_3d_path.join('\n') : '',
       description: project.description || '',
       country_id: project.country_id || project.country?.id || '',
+      partner_id: project.partner_id || project.partner?.id || '',
       latitude: project.latitude ?? '',
       longitude: project.longitude ?? '',
     });
@@ -486,6 +500,7 @@ const AdminInvestmentManagement = () => {
     render_3d_path: '',
       description: '',
       country_id: '',
+      partner_id: '',
     latitude: '',
     longitude: '',
     });
@@ -502,7 +517,6 @@ const AdminInvestmentManagement = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
-    setError('');
     try {
       const payload = {
         ...formData,
@@ -542,16 +556,18 @@ const AdminInvestmentManagement = () => {
         render3DFiles.forEach((file) => requestData.append('render_3d[]', file));
       }
 
-      if (editingProject?.uuid) {
+      const isEditing = Boolean(editingProject?.uuid);
+      if (isEditing) {
         await service.updateInvestment(editingProject.uuid, requestData);
       } else {
         await service.createInvestment(requestData);
       }
       await refreshInvestmentData();
       resetForm();
+      toast.success(isEditing ? 'Projet mis à jour avec succès.' : 'Projet créé avec succès.');
     } catch (err) {
       console.error('Erreur lors de l\'enregistrement:', err);
-      setError(err.response?.data?.message || 'Erreur lors de l\'enregistrement.');
+      toast.error(err.response?.data?.message || 'Erreur lors de l\'enregistrement.');
     } finally {
       setSaving(false);
     }
@@ -563,9 +579,10 @@ const AdminInvestmentManagement = () => {
     try {
       await service.deleteInvestment(project.uuid);
       await refreshInvestmentData();
+      toast.success('Projet supprimé avec succès.');
     } catch (err) {
       console.error('Erreur lors de la suppression:', err);
-      setError('Erreur lors de la suppression.');
+      toast.error('Erreur lors de la suppression.');
     }
   };
 
@@ -579,9 +596,10 @@ const AdminInvestmentManagement = () => {
         return;
       }
       await refreshInvestmentData();
+      toast.success('Projet approuvé avec succès.');
     } catch (err) {
       console.error('Erreur approbation:', err);
-      setError('Erreur lors de la mise a jour du statut.');
+      toast.error('Erreur lors de la mise a jour du statut.');
     }
   };
 
@@ -589,24 +607,26 @@ const AdminInvestmentManagement = () => {
     try {
       await service.approveClientRequest(uuid);
       await loadProjects({ silent: true });
+      toast.success('Demande approuvée avec succès.');
     } catch (err) {
       console.error('Erreur approbation demande client:', err);
-      setError('Erreur lors de la mise a jour du statut.');
+      toast.error('Erreur lors de la mise a jour du statut.');
     }
   };
 
   const handleAssignClientRequest = async (uuid) => {
     const agentId = assignments[uuid];
     if (!agentId) {
-      alert('Veuillez selectionner un agent');
+      toast.warning('Veuillez selectionner un agent');
       return;
     }
     try {
       await service.assignClientRequest(uuid, { agent_id: agentId });
       await loadProjects({ silent: true });
+      toast.success('Agent assigné avec succès.');
     } catch (err) {
       console.error('Erreur assignation demande client:', err);
-      setError(err.response?.data?.message || 'Erreur lors de l assignation.');
+      toast.error(err.response?.data?.message || 'Erreur lors de l assignation.');
     }
   };
 
@@ -617,7 +637,7 @@ const AdminInvestmentManagement = () => {
   const confirmReject = async () => {
     if (!rejectModal.project?.uuid) return;
     if (!rejectModal.reason.trim()) {
-      alert('Motif obligatoire.');
+      toast.warning('Motif obligatoire.');
       return;
     }
     try {
@@ -628,9 +648,10 @@ const AdminInvestmentManagement = () => {
       }
       await refreshInvestmentData();
       setRejectModal({ open: false, project: null, reason: '' });
+      toast.success(isRequestsOnlyView ? 'Demande refusée avec succès.' : 'Projet rejeté avec succès.');
     } catch (err) {
       console.error('Erreur approbation:', err);
-      setError('Erreur lors de la mise a jour du statut.');
+      toast.error('Erreur lors de la mise a jour du statut.');
     }
   };
 
@@ -797,10 +818,6 @@ const AdminInvestmentManagement = () => {
                         : "Creez, publiez et gerez les projets d'investissement."}
               </p>
             </div>
-
-            {error && (
-              <div className="surface-panel p-4 text-sm text-[rgb(var(--clay))]">{error}</div>
-            )}
 
             {isRequestsOnlyView && (
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -1078,6 +1095,20 @@ const AdminInvestmentManagement = () => {
                             <option value="">Pays (optionnel)</option>
                             {countries.map((country) => (
                               <option key={country.id} value={country.id}>{country.flag ? `${country.flag} ` : ''}{country.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-2">Partenaire financier</label>
+                          <select
+                            name="partner_id"
+                            value={formData.partner_id}
+                            onChange={handleChange}
+                            className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
+                          >
+                            <option value="">Partenaire financier (optionnel)</option>
+                            {partners.map((partner) => (
+                              <option key={partner.id} value={partner.id}>{partner.company_name}</option>
                             ))}
                           </select>
                         </div>

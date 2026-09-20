@@ -6,6 +6,7 @@ import {
   Navigate,
 } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
+import { ToastProvider } from "./components/common/Toast";
 import ProtectedRoute from "./components/common/ProtectedRoute";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -20,6 +21,7 @@ import AdminPartnershipManagement from "./components/admin/AdminPartnershipManag
 import AdminPartnerProductsValidation from "./components/admin/AdminPartnerProductsValidation";
 import AdminHouseModelsManagement from "./components/admin/AdminHouseModelsManagement";
 import AdminPresentationVideoManagement from "./components/admin/AdminPresentationVideoManagement";
+import AdminNavAdsManagement from "./components/admin/AdminNavAdsManagement";
 import AdminReports from "./components/admin/AdminReports";
 import DashboardManager from "./components/manager/DashboardManager";
 import PropertyManagementManager from "./components/manager/PropertyManagement";
@@ -27,6 +29,7 @@ import ManagerAssignments from "./components/manager/ManagerAssignments";
 import ManagerReports from "./components/manager/ManagerReports";
 import ManagerProfile from "./components/manager/ManagerProfile";
 import ClientRequests from "./components/manager/ClientRequests";
+import ManagerMessageManagement from "./components/manager/ManagerMessageManagement";
 import ConstructionManagement from "./components/manager/ConstructionManagement";
 import DashboardAgent from "./components/agent/DashboardAgent";
 import PropertyValidation from "./components/agent/PropertyValidation";
@@ -39,6 +42,7 @@ import AgentPropertyManagement from "./components/agent/AgentPropertyManagement"
 import AgentAssignments from "./components/agent/AgentAssignments";
 import AgentConstructionPublications from "./components/agent/AgentConstructionPublications";
 import AgentInvestmentPublications from "./components/agent/AgentInvestmentPublications";
+import AgentInvestmentProposals from "./components/agent/AgentInvestmentProposals";
 import VisitorProfile from "./components/visitor/VisitorProfile";
 import DashboardInvestor from "./components/investor/DashboardInvestor";
 import InvestorOpportunities from "./components/investor/InvestorOpportunities";
@@ -51,6 +55,7 @@ import { ROLES } from "./utils/roles";
 
 function App() {
   return (
+    <ToastProvider>
     <AuthProvider>
       <Router>
         <div className="App">
@@ -156,6 +161,14 @@ function App() {
               }
             />
             <Route
+              path="/admin/nav-ads"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
+                  <AdminNavAdsManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/admin/partnerships"
               element={
                 <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
@@ -226,6 +239,14 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={[ROLES.MANAGER]}>
                   <ClientRequests />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/manager/messages"
+              element={
+                <ProtectedRoute allowedRoles={[ROLES.MANAGER]}>
+                  <ManagerMessageManagement />
                 </ProtectedRoute>
               }
             />
@@ -354,6 +375,17 @@ function App() {
               }
             />
             <Route
+              path="/agent/investment-proposals"
+              element={
+                <ProtectedRoute
+                  allowedRoles={[ROLES.AGENT]}
+                  allowedAgentTypes={["investissement"]}
+                >
+                  <AgentInvestmentProposals />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/agent/property-requests/:uuid/create"
               element={
                 <ProtectedRoute
@@ -438,6 +470,7 @@ function App() {
         </div>
       </Router>
     </AuthProvider>
+    </ToastProvider>
   );
 }
 

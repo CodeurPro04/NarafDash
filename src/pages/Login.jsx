@@ -1,21 +1,21 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../components/common/Toast';
 import { Building, Eye, EyeOff, Mail, Lock, ArrowRight } from 'lucide-react';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login, logout } = useAuth();
   const navigate = useNavigate();
+  const toast = useToast();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
 
     try {
       const result = await login(email, password);
@@ -34,7 +34,7 @@ const Login = () => {
             navigate('/agent/dashboard');
             break;
           case 'proprietaire':
-            setError("Les proprietaires utilisent l'espace profil du site public.");
+            toast.error("Les proprietaires utilisent l'espace profil du site public.");
             await logout();
             break;
           case 'visiteur':
@@ -50,10 +50,10 @@ const Login = () => {
             navigate('/dashboard');
         }
       } else {
-        setError(result.error);
+        toast.error(result.error);
       }
     } catch (err) {
-      setError('Une erreur inattendue s\'est produite');
+      toast.error('Une erreur inattendue s\'est produite');
     } finally {
       setLoading(false);
     }
@@ -65,7 +65,7 @@ const Login = () => {
         <div className="text-center mb-8">
           <div className="h-16 w-16 text-white flex items-center justify-center mx-auto">     
               <img
-                src="/images/logonaraf.png"
+                src="/images/logovfnaraf-white.png"
                 alt="NARAF Immobilier"
                 className="h-8 w-auto object-contain"
               />
@@ -123,12 +123,6 @@ const Login = () => {
                 </button>
               </div>
             </div>
-
-            {error && (
-              <div className="surface-soft px-4 py-3 text-sm text-[rgb(var(--clay))]">
-                {error}
-              </div>
-            )}
 
             <button type="submit" disabled={loading} className="btn-primary w-full">
               {loading ? (

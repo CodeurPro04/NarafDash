@@ -7,10 +7,12 @@ import { useAuth } from '../../contexts/AuthContext';
 import { normalizeAgentType } from '../../utils/agentType';
 import { formatFcfa, formatFcfaRange } from '../../utils/currency';
 import { FileText, Flag, Handshake, Search as SearchIcon } from 'lucide-react';
+import { useToast } from '../common/Toast';
 
 const AgentSearchRequests = () => {
   const location = useLocation();
   const { user } = useAuth();
+  const toast = useToast();
   const agentType = normalizeAgentType(user?.agent_type || user?.agentType);
   const currentView = new URLSearchParams(location.search).get('view') || 'assigned';
   const isHistoryView = currentView === 'history';
@@ -135,9 +137,11 @@ const AgentSearchRequests = () => {
       setProcessingUuid(uuid);
       await agentService.approveSearchRequest(uuid);
       await loadData({ silent: true });
+      toast.success('Demande de recherche approuvee avec succes.');
     } catch (err) {
       console.error('Erreur approbation recherche:', err);
       setError(err.response?.data?.message || 'Impossible d approuver cette demande.');
+      toast.error(err.response?.data?.message || 'Impossible d approuver cette demande.');
     } finally {
       setProcessingUuid('');
     }
@@ -147,6 +151,7 @@ const AgentSearchRequests = () => {
     const reason = rejectModal.reason.trim();
     if (!reason) {
       setRejectModal((prev) => ({ ...prev, error: 'Le motif du refus est obligatoire.' }));
+      toast.warning('Le motif du refus est obligatoire.');
       return;
     }
 
@@ -155,9 +160,11 @@ const AgentSearchRequests = () => {
       await agentService.rejectSearchRequest(rejectModal.uuid, { rejection_reason: reason });
       await loadData({ silent: true });
       setRejectModal({ open: false, uuid: '', reason: '', error: '' });
+      toast.success('Demande de recherche refusee avec succes.');
     } catch (err) {
       console.error('Erreur refus recherche:', err);
       setError(err.response?.data?.message || 'Impossible de refuser cette demande.');
+      toast.error(err.response?.data?.message || 'Impossible de refuser cette demande.');
     } finally {
       setProcessingUuid('');
     }
@@ -169,6 +176,7 @@ const AgentSearchRequests = () => {
     const content = (draft.content || '').trim();
     if (!content) {
       setError('Le rapport d avancement doit contenir un detail.');
+      toast.warning('Le rapport d avancement doit contenir un detail.');
       return;
     }
 
@@ -184,9 +192,11 @@ const AgentSearchRequests = () => {
         [uuid]: { content: '', summary: '', client_feedback: '', next_step: '' },
       }));
       await loadData({ silent: true });
+      toast.success('Rapport envoye avec succes.');
     } catch (err) {
       console.error('Erreur rapport recherche:', err);
       setError(err.response?.data?.message || 'Impossible d envoyer le rapport a l administration.');
+      toast.error(err.response?.data?.message || 'Impossible d envoyer le rapport a l administration.');
     }
   };
 
@@ -198,10 +208,12 @@ const AgentSearchRequests = () => {
 
     if (!content) {
       setError('Le rapport final est obligatoire pour conclure la recherche.');
+      toast.warning('Le rapport final est obligatoire pour conclure la recherche.');
       return;
     }
     if (!closureNote) {
       setConclusionModal((prev) => ({ ...prev, error: 'La note de conclusion est obligatoire.' }));
+      toast.warning('La note de conclusion est obligatoire.');
       return;
     }
 
@@ -218,12 +230,15 @@ const AgentSearchRequests = () => {
       }));
       setConclusionModal({ open: false, uuid: '', item: null, error: '' });
       await loadData({ silent: true });
+      toast.success('Recherche conclue avec succes.');
     } catch (err) {
       console.error('Erreur conclusion recherche:', err);
+      const message = err.response?.data?.message || 'Impossible d envoyer la conclusion a l administration.';
       setConclusionModal((prev) => ({
         ...prev,
-        error: err.response?.data?.message || 'Impossible d envoyer la conclusion a l administration.',
+        error: message,
       }));
+      toast.error(message);
     }
   };
 

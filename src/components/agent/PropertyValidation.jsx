@@ -4,9 +4,11 @@ import Sidebar from '../common/Sidebar';
 import { agentService } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 import { Check, X, FileText, Plus } from 'lucide-react';
+import { useToast } from '../common/Toast';
 
 const PropertyValidation = () => {
   const navigate = useNavigate();
+  const toast = useToast();
   const [propertyRequests, setPropertyRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
   const [requestToReject, setRequestToReject] = useState(null);
@@ -54,6 +56,7 @@ const PropertyValidation = () => {
         setPropertyRequests((prev) => prev.map((request) => (
           request.uuid === uuid ? { ...request, status: 'agent_approved' } : request
         )));
+        toast.success('Demande approuvee avec succes.');
       } else {
         const target = propertyRequests.find((request) => request.uuid === uuid);
         setRequestToReject(target || { uuid });
@@ -61,7 +64,7 @@ const PropertyValidation = () => {
       }
     } catch (error) {
       console.error('Erreur lors de la decision:', error);
-      alert('Erreur lors de la decision.');
+      toast.error('Erreur lors de la decision.');
     } finally {
       setActionLoading(false);
     }
@@ -70,7 +73,7 @@ const PropertyValidation = () => {
   const confirmRejectRequest = async () => {
     if (!requestToReject?.uuid) return;
     if (!requestRejectionReason.trim()) {
-      alert('Le motif est obligatoire.');
+      toast.warning('Le motif est obligatoire.');
       return;
     }
     try {
@@ -83,9 +86,10 @@ const PropertyValidation = () => {
       )));
       setRequestToReject(null);
       setRequestRejectionReason('');
+      toast.success('Demande refusee avec succes.');
     } catch (error) {
       console.error('Erreur lors du refus:', error);
-      alert('Erreur lors du refus.');
+      toast.error('Erreur lors du refus.');
     } finally {
       setActionLoading(false);
     }

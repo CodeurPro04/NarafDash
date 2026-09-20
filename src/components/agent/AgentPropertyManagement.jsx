@@ -2,17 +2,21 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
-import { agentService, propertyTypeService, countryService } from '../../services/api';
-import { Building, Search, Eye, MapPin, Banknote, User, Calendar, Image, Edit, Upload, Save, LocateFixed, Map as MapIcon } from 'lucide-react';
+import { agentService, propertyTypeService, countryService, partnershipLookupService } from '../../services/api';
+import { Building, Search, Eye, MapPin, Banknote, User, Calendar, Image, Edit, Upload, Save, LocateFixed, Map as MapIcon, CheckCircle } from 'lucide-react';
 import { resolveMediaUrl } from '../../utils/media';
 import SecureImage from '../common/SecureImage';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAddressLocation } from '../../hooks/useAddressLocation';
 import { getTypeRules, resetHiddenFields } from '../../utils/propertyTypeRules';
+import { useToast } from '../common/Toast';
+
+const DECIMAL_CHAR_KEYS = ['surface_area', 'land_area'];
 
 const AgentPropertyManagement = () => {
   const location = useLocation();
   const { user } = useAuth();
+  const toast = useToast();
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -25,6 +29,7 @@ const AgentPropertyManagement = () => {
   const [types, setTypes] = useState([]);
   const [features, setFeatures] = useState([]);
   const [countries, setCountries] = useState([]);
+  const [partners, setPartners] = useState([]);
   const [images, setImages] = useState([]);
   const [planImages, setPlanImages] = useState([]);
   const [render3DImages, setRender3DImages] = useState([]);
@@ -55,10 +60,10 @@ const AgentPropertyManagement = () => {
     latitude: '',
     longitude: '',
     country_id: '',
+    partner_id: '',
     feature_ids: [],
   });
   const [savingEdit, setSavingEdit] = useState(false);
-  const [editError, setEditError] = useState('');
 
   const locationPicker = useAddressLocation({
     onResolved: ({ address, city, lat, lng }) => {
@@ -77,6 +82,32 @@ const AgentPropertyManagement = () => {
     [types, editForm.property_type_id]
   );
 
+  const selectedType = useMemo(
+    () => types.find((type) => String(type.id) === String(editForm.property_type_id)),
+    [types, editForm.property_type_id]
+  );
+
+  const requiredChecklist = useMemo(() => {
+    const items = [
+      { label: "Titre de l'annonce", done: editForm.title.trim().length > 0 },
+      { label: 'Type de bien', done: !!editForm.property_type_id },
+      { label: 'Prix', done: editForm.price !== '' && Number(editForm.price) > 0 },
+      { label: 'Description', done: editForm.description.trim().length > 0 },
+      { label: 'Adresse', done: editForm.address.trim().length > 0 },
+      { label: 'Ville', done: editForm.city.trim().length > 0 },
+      { label: 'Photos du bien', done: images.length > 0 || existingImages.length > 0 },
+    ];
+    activeRules.fields
+      .filter((field) => field.required)
+      .forEach((field) => {
+        items.push({ label: field.label, done: editForm[field.key] !== '' && editForm[field.key] !== null && editForm[field.key] !== undefined });
+      });
+    return items;
+  }, [editForm, activeRules, images.length, existingImages.length]);
+
+  const completedRequiredCount = requiredChecklist.filter((item) => item.done).length;
+  const completionPercent = Math.round((completedRequiredCount / requiredChecklist.length) * 100);
+
   const extractPayload = (response) => response?.data?.data ?? response?.data ?? [];
 
   useEffect(() => {
@@ -92,17 +123,20 @@ const AgentPropertyManagement = () => {
 
   const loadLookupData = async () => {
     try {
-      const [typesRes, featuresRes, countriesRes] = await Promise.all([
+      const [typesRes, featuresRes, countriesRes, partnersRes] = await Promise.all([
         propertyTypeService.getAll(),
         propertyTypeService.getFeatures(),
         countryService.getAll(),
+        partnershipLookupService.getApproved('immobilier'),
       ]);
       const typesPayload = extractPayload(typesRes);
       const featuresPayload = extractPayload(featuresRes);
       const countriesPayload = extractPayload(countriesRes);
+      const partnersPayload = extractPayload(partnersRes);
       setTypes(Array.isArray(typesPayload) ? typesPayload : typesPayload.data || []);
       setFeatures(Array.isArray(featuresPayload) ? featuresPayload : featuresPayload.data || []);
       setCountries(Array.isArray(countriesPayload) ? countriesPayload : countriesPayload.data || []);
+      setPartners(Array.isArray(partnersPayload) ? partnersPayload : partnersPayload.data || []);
     } catch (err) {
       console.error('Erreur lors du chargement des donnees de reference:', err);
     }
@@ -177,11 +211,10 @@ const AgentPropertyManagement = () => {
 
   const openEditModal = (property) => {
     if (!canEditProperty(property)) {
-      alert('Vous pouvez modifier uniquement les proprietes qui vous sont assignees.');
+      toast.warning('Vous pouvez modifier uniquement les proprietes qui vous sont assignees.');
       return;
     }
     setEditingProperty(property);
-    setEditError('');
     setImages([]);
     setPlanImages([]);
     setRender3DImages([]);
@@ -213,6 +246,7 @@ const AgentPropertyManagement = () => {
       latitude: property.latitude ?? '',
       longitude: property.longitude ?? '',
       country_id: property.country_id || property.country?.id || '',
+      partner_id: property.partner_id || property.partner?.id || '',
       feature_ids: Array.isArray(property.features) ? property.features.map((feature) => feature.id) : [],
     });
     locationPicker.reset();
@@ -294,9 +328,10 @@ const AgentPropertyManagement = () => {
     try {
       await agentService.deletePropertyMedia(mediaItem.id);
       categorySetter((prev) => prev.filter((item) => item.id !== mediaItem.id));
+      toast.success('Visuel supprime avec succes.');
     } catch (removeError) {
       console.error('Erreur suppression media:', removeError);
-      setEditError(removeError.response?.data?.message || 'Erreur lors de la suppression du visuel.');
+      toast.error(removeError.response?.data?.message || 'Erreur lors de la suppression du visuel.');
     }
   };
 
@@ -329,12 +364,11 @@ const AgentPropertyManagement = () => {
   const handleSaveEdit = async () => {
     if (!editingProperty?.uuid) return;
     if (existingImages.length === 0 && images.length === 0) {
-      setEditError('La propriete doit conserver au moins une image.');
+      toast.warning('La propriete doit conserver au moins une image.');
       return;
     }
     try {
       setSavingEdit(true);
-      setEditError('');
       const payload = new FormData();
       Object.entries(editForm).forEach(([key, value]) => {
         if (key === 'feature_ids') {
@@ -353,13 +387,14 @@ const AgentPropertyManagement = () => {
       render3DImages.forEach((image) => payload.append('render_3d_images[]', image));
 
       await agentService.updateProperty(editingProperty.uuid, payload);
+      toast.success('Propriete mise a jour avec succes.');
       setEditingProperty(null);
       await loadProperties({ silent: true });
     } catch (err) {
       console.error('Erreur lors de la mise a jour:', err);
       const apiErrors = err.response?.data?.errors;
       const details = apiErrors ? Object.values(apiErrors).flat().join(' ') : '';
-      setEditError(err.response?.data?.message || details || 'Erreur lors de la mise a jour.');
+      toast.error(err.response?.data?.message || details || 'Erreur lors de la mise a jour.');
     } finally {
       setSavingEdit(false);
     }
@@ -646,30 +681,38 @@ const AgentPropertyManagement = () => {
 
       {editingProperty && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="surface-card w-full max-w-5xl p-6 my-8 max-h-[92vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
+          <div className="surface-card w-full max-w-6xl p-6 my-8 max-h-[92vh] overflow-y-auto">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
               <div>
                 <h3 className="text-2xl font-semibold">Modifier la propriete</h3>
                 <p className="text-sm text-[rgba(15,42,46,0.6)]">Toute modification repasse la propriete en attente de validation.</p>
               </div>
-              <button onClick={() => setEditingProperty(null)} className="btn-ghost">Fermer</button>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5 text-xs text-[rgba(15,42,46,0.6)]">
+                  <span className="whitespace-nowrap">{completedRequiredCount}/{requiredChecklist.length} champs requis</span>
+                  <div className="h-1.5 w-20 sm:w-28 rounded-full bg-[rgba(15,42,46,0.08)] overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all ${completionPercent === 100 ? 'bg-emerald-500' : 'bg-[rgb(var(--clay))]'}`}
+                      style={{ width: `${completionPercent}%` }}
+                    />
+                  </div>
+                </div>
+                <button onClick={() => setEditingProperty(null)} className="btn-ghost">Fermer</button>
+              </div>
             </div>
 
-            {editError && (
-              <div className="surface-panel p-4 text-sm text-[rgb(var(--clay))] mb-6">{editError}</div>
-            )}
-
-            <div className="space-y-8">
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start">
+              <div className="space-y-6 min-w-0">
               <div className="surface-panel p-6 space-y-6">
                 <div className="flex items-center gap-3">
                   <div className="h-8 w-8 rounded-full bg-[rgb(var(--ink))] text-white flex items-center justify-center text-sm font-semibold shrink-0">1</div>
                   <div>
                     <h2 className="text-lg font-semibold">Informations generales</h2>
-                    <p className="text-xs text-[rgba(15,42,46,0.55)]">Titre, type de bien et tarification</p>
+                    <p className="text-xs text-[rgba(15,42,46,0.55)]">Titre, type de bien, transaction et prix</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
+                  <div className="md:col-span-2">
                     <label className="block text-sm font-medium mb-2">Titre *</label>
                     <input
                       type="text"
@@ -677,7 +720,7 @@ const AgentPropertyManagement = () => {
                       value={editForm.title}
                       onChange={handleEditChange}
                       required
-                      className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
+                      className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
                     />
                   </div>
                   <div>
@@ -687,7 +730,7 @@ const AgentPropertyManagement = () => {
                       value={editForm.property_type_id}
                       onChange={handleEditChange}
                       required
-                      className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
+                      className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
                     >
                       <option value="">Selectionner</option>
                       {types.map((type) => (
@@ -697,37 +740,45 @@ const AgentPropertyManagement = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-2">Transaction *</label>
-                    <select
-                      name="transaction_type"
-                      value={editForm.transaction_type}
-                      onChange={handleEditChange}
-                      required
-                      className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
-                    >
-                      <option value="vente">Vente</option>
-                      <option value="location">Location</option>
-                    </select>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[{ value: 'vente', label: 'Vente' }, { value: 'location', label: 'Location' }].map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => handleEditChange({ target: { name: 'transaction_type', value: option.value, type: 'text' } })}
+                          className={`rounded-xl border px-4 py-3 text-sm font-medium transition-colors ${
+                            editForm.transaction_type === option.value
+                              ? 'bg-[rgb(var(--ink))] text-white border-[rgb(var(--ink))]'
+                              : 'bg-white/70 border-[rgb(var(--line))] text-[rgb(var(--ink))] hover:border-[rgba(15,42,46,0.4)]'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-2">Prix *</label>
                     <div className="grid grid-cols-3 gap-2">
                       <input
                         type="number"
+                        step="0.01"
                         name="price"
                         value={editForm.price}
                         onChange={handleEditChange}
                         required
-                        className="col-span-2 rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
+                        min="0"
+                        className="col-span-2 rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
                       />
                       <input
                         type="text"
                         name="currency"
                         value={editForm.currency}
                         onChange={handleEditChange}
-                        className="rounded-xl border border-[rgb(var(--line))] bg-white/70 px-3 py-3 text-sm"
+                        className="rounded-xl border border-[rgb(var(--line))] bg-white/70 px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
                       />
                     </div>
-                    <label className="flex items-center gap-2 text-xs text-[rgba(15,42,46,0.6)] mt-2">
+                    <label className="inline-flex items-center gap-2 text-xs text-[rgba(15,42,46,0.6)] mt-2">
                       <input
                         type="checkbox"
                         name="negotiable"
@@ -738,28 +789,28 @@ const AgentPropertyManagement = () => {
                       Prix negociable
                     </label>
                   </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Description *</label>
-                  <textarea
-                    name="description"
-                    value={editForm.description}
-                    onChange={handleEditChange}
-                    required
-                    rows={4}
-                    className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Commentaire</label>
-                  <textarea
-                    name="agent_comment"
-                    value={editForm.agent_comment}
-                    onChange={handleEditChange}
-                    rows={3}
-                    className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm"
-                    placeholder="Commentaire interne..."
-                  />
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium mb-2">Description *</label>
+                    <textarea
+                      name="description"
+                      value={editForm.description}
+                      onChange={handleEditChange}
+                      required
+                      rows={4}
+                      className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium mb-2">Commentaire</label>
+                    <textarea
+                      name="agent_comment"
+                      value={editForm.agent_comment}
+                      onChange={handleEditChange}
+                      rows={3}
+                      className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
+                      placeholder="Commentaire interne..."
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -768,7 +819,7 @@ const AgentPropertyManagement = () => {
                   <div className="h-8 w-8 rounded-full bg-[rgb(var(--ink))] text-white flex items-center justify-center text-sm font-semibold shrink-0">2</div>
                   <div>
                     <h2 className="text-lg font-semibold">Caracteristiques</h2>
-                    <p className="text-xs text-[rgba(15,42,46,0.55)]">Surfaces, pieces et equipements specifiques</p>
+                    <p className="text-xs text-[rgba(15,42,46,0.55)]">Surfaces, pieces et details techniques</p>
                   </div>
                 </div>
                 {activeRules.hint && (
@@ -784,15 +835,16 @@ const AgentPropertyManagement = () => {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {activeRules.fields.map((field) => (
                       <div key={field.key}>
-                        <label className="block text-xs text-[rgba(15,42,46,0.6)] mb-1">{field.label}</label>
+                        <label className="block text-xs text-[rgba(15,42,46,0.6)] mb-1">{field.label}{field.required ? ' *' : ''}</label>
                         <input
                           type="number"
+                          step={DECIMAL_CHAR_KEYS.includes(field.key) ? '0.01' : '1'}
                           name={field.key}
                           required={field.required}
                           value={editForm[field.key]}
                           onChange={handleEditChange}
                           min="0"
-                          className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-3 py-2 text-sm"
+                          className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
                         />
                       </div>
                     ))}
@@ -882,29 +934,46 @@ const AgentPropertyManagement = () => {
                       <option key={country.id} value={country.id}>{country.flag ? `${country.flag} ` : ''}{country.name}</option>
                     ))}
                   </select>
+                  <select name="partner_id" value={editForm.partner_id} onChange={handleEditChange} className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]">
+                    <option value="">Partenaire (optionnel)</option>
+                    {partners.map((partner) => (
+                      <option key={partner.id} value={partner.id}>{partner.company_name}</option>
+                    ))}
+                  </select>
                   <input type="text" name="commune" value={editForm.commune} onChange={handleEditChange} placeholder="Commune" className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]" />
                   <input type="text" name="quartier" value={editForm.quartier} onChange={handleEditChange} placeholder="Quartier" className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]" />
                 </div>
               </div>
 
               {activeRules.showFeatures && features.length > 0 && (
-                <div className="surface-panel p-6 space-y-6">
+                <div className="surface-panel p-6 space-y-5">
                   <div className="flex items-center gap-3">
                     <div className="h-8 w-8 rounded-full bg-[rgb(var(--ink))] text-white flex items-center justify-center text-sm font-semibold shrink-0">4</div>
-                    <h2 className="text-lg font-semibold">Equipements</h2>
+                    <div>
+                      <h2 className="text-lg font-semibold">Equipements</h2>
+                      <p className="text-xs text-[rgba(15,42,46,0.55)]">Selectionnez les commodites disponibles (optionnel)</p>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {features.map((feature) => (
-                      <label key={feature.id} className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={editForm.feature_ids.includes(feature.id)}
-                          onChange={() => toggleEditFeature(feature.id)}
-                          className="rounded border-[rgb(var(--line))]"
-                        />
-                        {feature.name}
-                      </label>
-                    ))}
+                  <div className="flex flex-wrap gap-2">
+                    {features.map((feature) => {
+                      const active = editForm.feature_ids.includes(feature.id);
+                      return (
+                        <button
+                          key={feature.id}
+                          type="button"
+                          onClick={() => toggleEditFeature(feature.id)}
+                          aria-pressed={active}
+                          className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
+                            active
+                              ? 'bg-[rgb(var(--ink))] text-white border-[rgb(var(--ink))]'
+                              : 'bg-white/70 text-[rgb(var(--ink))] border-[rgb(var(--line))] hover:border-[rgba(15,42,46,0.4)]'
+                          }`}
+                        >
+                          {active && <CheckCircle className="h-3.5 w-3.5" />}
+                          {feature.name}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -978,18 +1047,64 @@ const AgentPropertyManagement = () => {
                   {renderPreviewGrid(render3DImages, removeRender3DImage, 'Nouveaux visuels 3D')}
                 </div>
               </div>
-            </div>
+              </div>
 
-            <div className="flex justify-end gap-3 mt-8">
-              <button onClick={() => setEditingProperty(null)} className="btn-ghost">Annuler</button>
-              <button onClick={handleSaveEdit} className="btn-primary" disabled={savingEdit}>
-                {savingEdit ? 'Sauvegarde...' : (
-                  <>
+              <div className="space-y-4 lg:sticky lg:top-6">
+                <div className="surface-panel p-5 space-y-4">
+                  <p className="text-xs font-medium uppercase tracking-wide text-[rgba(15,42,46,0.5)]">Apercu de l'annonce</p>
+                  <div className="flex items-center gap-3">
+                    <div className="h-11 w-11 shrink-0 rounded-xl bg-[rgba(15,42,46,0.08)] flex items-center justify-center overflow-hidden">
+                      {images[0] ? (
+                        <img src={URL.createObjectURL(images[0])} alt="" className="h-full w-full object-cover" />
+                      ) : existingImages[0] ? (
+                        <SecureImage src={resolveMediaUrl(getMediaCandidate(existingImages[0]))} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <Building className="h-5 w-5 text-[rgba(15,42,46,0.4)]" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-[rgb(var(--ink))] truncate">{editForm.title || "Titre de l'annonce"}</p>
+                      <p className="text-xs text-[rgba(15,42,46,0.55)] truncate capitalize">{selectedType?.name || 'Type non defini'} · {editForm.transaction_type}</p>
+                    </div>
+                  </div>
+                  <p className="text-2xl font-semibold text-[rgb(var(--ink))]">
+                    {editForm.price ? `${Number(editForm.price).toLocaleString()} ${editForm.currency}` : '—'}
+                    {editForm.negotiable && editForm.price ? <span className="text-xs font-normal text-[rgba(15,42,46,0.5)] ml-2">Negociable</span> : null}
+                  </p>
+                  {(editForm.address || editForm.city) && (
+                    <p className="text-xs text-[rgba(15,42,46,0.6)] flex items-start gap-1.5">
+                      <MapPin className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                      <span>{[editForm.address, editForm.commune, editForm.city].filter(Boolean).join(', ')}</span>
+                    </p>
+                  )}
+                </div>
+
+                <div className="surface-panel p-5 space-y-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-[rgba(15,42,46,0.5)]">Champs requis ({completedRequiredCount}/{requiredChecklist.length})</p>
+                  <ul className="space-y-2">
+                    {requiredChecklist.map((item) => (
+                      <li key={item.label} className="flex items-center gap-2 text-sm">
+                        {item.done ? (
+                          <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" />
+                        ) : (
+                          <span className="h-4 w-4 rounded-full border-2 border-[rgba(15,42,46,0.2)] shrink-0" />
+                        )}
+                        <span className={item.done ? 'text-[rgb(var(--ink))]' : 'text-[rgba(15,42,46,0.5)]'}>{item.label}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="surface-panel p-5 space-y-2.5">
+                  <button onClick={handleSaveEdit} disabled={savingEdit} className="btn-primary w-full justify-center">
                     <Save className="h-4 w-4" />
-                    Enregistrer
-                  </>
-                )}
-              </button>
+                    {savingEdit ? 'Enregistrement...' : 'Enregistrer les modifications'}
+                  </button>
+                  <button type="button" onClick={() => setEditingProperty(null)} className="btn-ghost w-full justify-center">
+                    Annuler
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

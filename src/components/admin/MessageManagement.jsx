@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
+import { useToast } from '../common/Toast';
 import { adminService } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -22,13 +23,38 @@ import {
   ArchiveRestore,
 } from 'lucide-react';
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 40;
 const AVATAR_COLORS = ['#0F2A2E', '#3E6D6B', '#9B5A2E', '#7C3A1F', '#2D5D7C', '#6A4B7D'];
 
 const getName = (person) => {
   if (!person) return 'Utilisateur';
   const name = person.full_name || `${person.first_name || ''} ${person.last_name || ''}`.trim();
   return name || 'Utilisateur';
+};
+
+const AGENT_TYPE_LABELS = {
+  constructeur: 'Agent Construction',
+  immobilier: 'Agent Immobilier',
+  investissement: 'Agent Investissement',
+};
+
+const ROLE_LABELS = {
+  admin: 'Administrateur',
+  administrateur: 'Administrateur',
+  gestionnaire: 'Gestionnaire',
+};
+
+// Libelle affiche sous une bulle : nom + role (administrateur, gestionnaire,
+// ou specialite de l'agent) pour savoir precisement qui repond dans le fil.
+const getSenderLabel = (person) => {
+  const name = getName(person);
+  const roleSlug = person?.role?.slug;
+  if (ROLE_LABELS[roleSlug]) return `${name} · ${ROLE_LABELS[roleSlug]}`;
+  if (roleSlug === 'agent') {
+    const typeLabel = AGENT_TYPE_LABELS[person?.agent_type];
+    return typeLabel ? `${name} · ${typeLabel}` : `${name} · Agent`;
+  }
+  return name;
 };
 
 const getInitials = (name) => (name || 'U')
@@ -68,10 +94,10 @@ const MessageManagement = () => {
   const location = useLocation();
   const { user } = useAuth();
   const currentUserId = user?.id;
+  const toast = useToast();
 
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -95,11 +121,44 @@ const MessageManagement = () => {
   const [selectedRecipient, setSelectedRecipient] = useState(null);
   const [composeText, setComposeText] = useState('');
   const [composeSending, setComposeSending] = useState(false);
-  const [composeError, setComposeError] = useState('');
 
   const threadScrollRef = useRef(null);
+  const prevThreadLengthRef = useRef(0);
 
   const extractPayload = (response) => response?.data?.data ?? response?.data ?? [];
+
+  // Regroupe les messages plats (racine + reponses) par fil de discussion, de
+  // sorte qu'une reponse ne fasse jamais apparaitre une "nouvelle" conversation
+  // dans la liste : chaque fil garde une seule entree, mise a jour et remontee
+  // en tete des lors qu'un nouveau message y arrive (comme WhatsApp).
+  const conversations = useMemo(() => {
+    if (!Array.isArray(messages) || messages.length === 0) return [];
+
+    const groups = new Map();
+    messages.forEach((message) => {
+      const key = message.parent_message_id || message.id;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(message);
+    });
+
+    const list = [];
+    groups.forEach((groupMessages) => {
+      const root = groupMessages.find((item) => !item.parent_message_id) || groupMessages[0];
+      const sorted = [...groupMessages].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      const last = sorted[sorted.length - 1];
+      const otherParty = last.sender_id === currentUserId ? last.recipient : last.sender;
+      const unread = groupMessages.some((item) => item.sender_id !== currentUserId && !item.is_read);
+      list.push({
+        uuid: root.uuid,
+        root,
+        otherParty: otherParty || last.recipient || last.sender,
+        lastMessage: last,
+        unread,
+      });
+    });
+
+    return list.sort((a, b) => new Date(b.lastMessage.created_at) - new Date(a.lastMessage.created_at));
+  }, [messages, currentUserId]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -122,22 +181,41 @@ const MessageManagement = () => {
   }, [page, searchTerm, statusFilter]);
 
   useEffect(() => {
+    prevThreadLengthRef.current = 0;
     if (selectedUuid) {
       loadThread(selectedUuid);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedUuid]);
 
+  // Rafraichissement discret de la liste et du fil ouvert, pour que le
+  // panneau admin reste a jour comme une vraie messagerie sans que l'admin
+  // ait besoin de recharger la page manuellement.
   useEffect(() => {
-    if (threadScrollRef.current) {
-      threadScrollRef.current.scrollTop = threadScrollRef.current.scrollHeight;
+    const interval = setInterval(() => loadMessages({ silent: true }), 8000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, searchTerm, statusFilter]);
+
+  useEffect(() => {
+    if (!selectedUuid) return undefined;
+    const interval = setInterval(() => loadThread(selectedUuid, { silent: true }), 4000);
+    return () => clearInterval(interval);
+  }, [selectedUuid]);
+
+  useEffect(() => {
+    const container = threadScrollRef.current;
+    if (!container) return;
+    const hasNewMessage = thread.length > prevThreadLengthRef.current;
+    prevThreadLengthRef.current = thread.length;
+    if (hasNewMessage) {
+      container.scrollTop = container.scrollHeight;
     }
   }, [thread]);
 
   const loadMessages = async ({ silent = false } = {}) => {
     try {
       if (!silent) setLoading(true);
-      setError('');
       const response = await adminService.getMessages({
         page,
         per_page: PAGE_SIZE,
@@ -161,31 +239,37 @@ const MessageManagement = () => {
       }
     } catch (err) {
       console.error('Erreur lors du chargement des messages:', err);
-      setError('Impossible de charger les messages.');
+      toast.error('Impossible de charger les messages.');
       setMessages([]);
     } finally {
       if (!silent) setLoading(false);
     }
   };
 
-  const loadThread = async (uuid) => {
+  const loadThread = async (uuid, { silent = false } = {}) => {
     try {
-      setThreadLoading(true);
-      setThreadError('');
+      if (!silent) {
+        setThreadLoading(true);
+        setThreadError('');
+      }
       const response = await adminService.getMessage(uuid);
       const data = response?.data?.data ?? response?.data ?? null;
       const threadData = response?.data?.thread;
       setThreadRoot(data);
       setThread(Array.isArray(threadData) && threadData.length > 0 ? threadData : (data ? [data] : []));
-      // Reflete localement le statut lu/non lu si le backend l'a marque au passage
-      setMessages((prev) => prev.map((item) => (item.uuid === uuid ? { ...item, is_read: item.is_read } : item)));
+      // Ouvrir un fil marque cote backend tous les messages qui m'etaient adresses
+      // comme lus : on rafraichit la liste pour faire disparaitre le point "non lu".
+      if (!silent) loadMessages({ silent: true });
     } catch (err) {
+      if (silent) return;
       console.error('Erreur lors du chargement de la conversation:', err);
-      setThreadError("Impossible de charger cette conversation. Elle n'existe peut-etre plus, ou vous n'y avez pas acces.");
+      const message = "Impossible de charger cette conversation. Elle n'existe peut-etre plus, ou vous n'y avez pas acces.";
+      setThreadError(message);
+      toast.error(message);
       setThreadRoot(null);
       setThread([]);
     } finally {
-      setThreadLoading(false);
+      if (!silent) setThreadLoading(false);
     }
   };
 
@@ -210,12 +294,13 @@ const MessageManagement = () => {
       await adminService.deleteMessage(uuid);
       setMessages((prev) => prev.filter((msg) => msg.uuid !== uuid));
       setTotal((prev) => Math.max(0, prev - 1));
+      toast.success('Message supprimé avec succès.');
       if (selectedUuid === uuid) {
         closeConversation();
       }
     } catch (err) {
       console.error('Erreur lors de la suppression:', err);
-      alert(err.response?.data?.message || 'Erreur lors de la suppression du message');
+      toast.error(err.response?.data?.message || 'Erreur lors de la suppression du message');
     }
   };
 
@@ -229,9 +314,10 @@ const MessageManagement = () => {
         await adminService.archiveMessage(uuid);
       }
       await loadMessages({ silent: true });
+      toast.success(isArchivedView ? 'Conversation désarchivée avec succès.' : 'Conversation archivée avec succès.');
     } catch (err) {
       console.error("Erreur lors de l'archivage:", err);
-      alert(err.response?.data?.message || "Erreur lors de l'archivage de la conversation");
+      toast.error(err.response?.data?.message || "Erreur lors de l'archivage de la conversation");
     }
   };
 
@@ -241,14 +327,16 @@ const MessageManagement = () => {
       if (threadRoot.archived_at) {
         await adminService.unarchiveMessage(selectedUuid);
         setThreadRoot((prev) => (prev ? { ...prev, archived_at: null } : prev));
+        toast.success('Conversation désarchivée avec succès.');
       } else {
         await adminService.archiveMessage(selectedUuid);
         setThreadRoot((prev) => (prev ? { ...prev, archived_at: new Date().toISOString() } : prev));
+        toast.success('Conversation archivée avec succès.');
       }
       loadMessages({ silent: true });
     } catch (err) {
       console.error("Erreur lors de l'archivage:", err);
-      alert(err.response?.data?.message || "Erreur lors de l'archivage de la conversation");
+      toast.error(err.response?.data?.message || "Erreur lors de l'archivage de la conversation");
     }
   };
 
@@ -265,9 +353,12 @@ const MessageManagement = () => {
       }
       setReplyText('');
       loadMessages({ silent: true });
+      toast.success('Message envoyé avec succès.');
     } catch (err) {
       console.error('Erreur lors de la reponse:', err);
-      setThreadError(err.response?.data?.message || "Erreur lors de l'envoi de la reponse.");
+      const message = err.response?.data?.message || "Erreur lors de l'envoi de la reponse.";
+      setThreadError(message);
+      toast.error(message);
     } finally {
       setSending(false);
     }
@@ -320,7 +411,6 @@ const MessageManagement = () => {
     setRecipientResults([]);
     setSelectedRecipient(null);
     setComposeText('');
-    setComposeError('');
     navigate('/admin/messages', { replace: true });
   };
 
@@ -330,7 +420,6 @@ const MessageManagement = () => {
     setRecipientQuery('');
     setRecipientResults([]);
     setComposeText('');
-    setComposeError('');
   };
 
   const handleSendNewMessage = async () => {
@@ -338,20 +427,20 @@ const MessageManagement = () => {
     if (!content || !selectedRecipient || composeSending) return;
     try {
       setComposeSending(true);
-      setComposeError('');
       const response = await adminService.createMessage({ recipient_id: selectedRecipient.id, message: content });
       const created = response?.data?.data;
       setComposing(false);
       setComposeText('');
       setSelectedRecipient(null);
       await loadMessages({ silent: true });
+      toast.success('Message envoyé avec succès.');
       if (created?.uuid) {
         setSelectedUuid(created.uuid);
         navigate(`/admin/messages?uuid=${created.uuid}`, { replace: true });
       }
     } catch (err) {
       console.error("Erreur lors de l'envoi du nouveau message:", err);
-      setComposeError(err.response?.data?.message || "Erreur lors de l'envoi du message.");
+      toast.error(err.response?.data?.message || "Erreur lors de l'envoi du message.");
     } finally {
       setComposeSending(false);
     }
@@ -378,8 +467,6 @@ const MessageManagement = () => {
                 Suivez les echanges avec les utilisateurs et repondez directement depuis la conversation.
               </p>
             </div>
-
-            {error && <div className="surface-panel p-4 text-sm text-[rgb(var(--clay))]">{error}</div>}
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               {[
@@ -469,30 +556,29 @@ const MessageManagement = () => {
                         <div className="h-14 rounded-xl bg-[rgba(15,42,46,0.05)] animate-pulse" />
                       </div>
                     ))
-                  ) : messages.length === 0 ? (
+                  ) : conversations.length === 0 ? (
                     <div className="px-5 py-14 text-center text-sm text-[rgba(15,42,46,0.5)]">
                       <Inbox className="h-8 w-8 mx-auto mb-3 text-[rgba(15,42,46,0.3)]" />
                       Aucun message ne correspond a ces criteres.
                     </div>
                   ) : (
-                    messages.map((message) => {
-                      const otherParty = message.sender_id === currentUserId ? message.recipient : message.sender;
+                    conversations.map((conversation) => {
+                      const { lastMessage, otherParty, unread } = conversation;
                       const senderName = getName(otherParty);
-                      const isSelected = selectedUuid === message.uuid;
-                      const isOwnLast = message.sender_id === currentUserId;
-                      const showUnreadDot = !isOwnLast && !message.is_read;
+                      const isSelected = selectedUuid === conversation.uuid;
+                      const isOwnLast = lastMessage.sender_id === currentUserId;
                       return (
                         <div
-                          key={message.uuid}
+                          key={conversation.uuid}
                           role="button"
                           tabIndex={0}
-                          onClick={() => selectConversation(message)}
-                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectConversation(message); } }}
+                          onClick={() => selectConversation(conversation)}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectConversation(conversation); } }}
                           className={`w-full text-left px-4 py-3.5 transition group relative cursor-pointer ${
                             isSelected ? 'bg-[rgba(15,42,46,0.06)]' : 'hover:bg-[rgba(15,42,46,0.03)]'
                           }`}
                         >
-                          {showUnreadDot && (
+                          {unread && (
                             <span className="absolute left-1.5 top-1/2 -translate-y-1/2 h-1.5 w-1.5 rounded-full bg-[rgb(var(--clay))]" />
                           )}
                           <div className="flex items-start gap-3 pl-2">
@@ -504,22 +590,22 @@ const MessageManagement = () => {
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center justify-between gap-2">
-                                <p className={`text-sm truncate ${showUnreadDot ? 'font-semibold' : 'font-medium'}`}>{senderName}</p>
+                                <p className={`text-sm truncate ${unread ? 'font-semibold' : 'font-medium'}`}>{senderName}</p>
                                 <div className="shrink-0">
                                   <div className="flex items-center gap-1 group-hover:hidden">
                                     {isOwnLast && (
-                                      message.is_read ? (
+                                      lastMessage.is_read ? (
                                         <CheckCheck className="h-3 w-3 text-[rgb(var(--sage))]" title="Lu" />
                                       ) : (
                                         <Check className="h-3 w-3 text-[rgba(15,42,46,0.35)]" title="Envoye" />
                                       )
                                     )}
-                                    <span className="text-[10px] text-[rgba(15,42,46,0.5)]">{formatListDate(message.created_at)}</span>
+                                    <span className="text-[10px] text-[rgba(15,42,46,0.5)]">{formatListDate(lastMessage.created_at)}</span>
                                   </div>
                                   <div className="hidden group-hover:flex items-center gap-2.5">
                                     <button
                                       type="button"
-                                      onClick={(e) => handleArchiveToggle(message.uuid, e)}
+                                      onClick={(e) => handleArchiveToggle(conversation.uuid, e)}
                                       className="text-[rgba(15,42,46,0.4)] hover:text-[rgb(var(--ink))] transition"
                                       title={statusFilter === 'archived' ? 'Desarchiver' : 'Archiver'}
                                     >
@@ -531,7 +617,7 @@ const MessageManagement = () => {
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={(e) => handleDelete(message.uuid, e)}
+                                      onClick={(e) => handleDelete(conversation.uuid, e)}
                                       className="text-[rgba(15,42,46,0.4)] hover:text-[rgb(var(--clay))] transition"
                                       title="Supprimer"
                                     >
@@ -540,8 +626,10 @@ const MessageManagement = () => {
                                   </div>
                                 </div>
                               </div>
-                              <p className="text-xs text-[rgba(15,42,46,0.6)] truncate">{message.subject || 'Sans objet'}</p>
-                              <p className="text-xs text-[rgba(15,42,46,0.45)] truncate mt-0.5">{message.message || ''}</p>
+                              <p className="text-xs text-[rgba(15,42,46,0.6)] truncate">{conversation.root.subject || 'Sans objet'}</p>
+                              <p className="text-xs text-[rgba(15,42,46,0.45)] truncate mt-0.5">
+                                {isOwnLast ? 'Vous : ' : ''}{lastMessage.message || ''}
+                              </p>
                             </div>
                           </div>
                         </div>
@@ -670,7 +758,6 @@ const MessageManagement = () => {
                           </button>
                         </div>
                         <div className="p-4 border-t border-[rgba(15,42,46,0.08)] shrink-0">
-                          {composeError && <p className="text-xs text-[rgb(var(--clay))] mb-2">{composeError}</p>}
                           <div className="flex items-end gap-2">
                             <textarea
                               value={composeText}
@@ -771,6 +858,7 @@ const MessageManagement = () => {
                       {thread.map((msg) => {
                         const isOwn = msg.sender_id === currentUserId;
                         const authorName = getName(msg.sender);
+                        const authorLabel = isOwn ? 'Vous' : getSenderLabel(msg.sender);
                         return (
                           <div key={msg.uuid || msg.id} className={`flex items-end gap-2.5 ${isOwn ? 'flex-row-reverse' : ''}`}>
                             <div
@@ -790,7 +878,7 @@ const MessageManagement = () => {
                                 {msg.message}
                               </div>
                               <span className="text-[10px] text-[rgba(15,42,46,0.45)] mt-1 px-1 flex items-center gap-1">
-                                {isOwn ? 'Vous' : authorName} · {formatFullDate(msg.created_at)}
+                                {authorLabel} · {formatFullDate(msg.created_at)}
                                 {isOwn && (
                                   msg.is_read ? (
                                     <CheckCheck className="h-3 w-3 text-[rgb(var(--sage))]" title="Lu" />

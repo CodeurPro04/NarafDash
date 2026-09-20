@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
+import { useToast } from '../common/Toast';
 import { adminService, propertyTypeService } from '../../services/api';
 import {
   Plus,
@@ -32,11 +33,10 @@ const categoryInfo = (value) =>
   };
 
 const AdminPropertyCatalog = () => {
+  const toast = useToast();
   const [types, setTypes] = useState([]);
   const [features, setFeatures] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
 
   const [newType, setNewType] = useState('');
   const [typeSearch, setTypeSearch] = useState('');
@@ -57,15 +57,9 @@ const AdminPropertyCatalog = () => {
     loadCatalog();
   }, []);
 
-  const showNotice = (message) => {
-    setNotice(message);
-    setTimeout(() => setNotice(''), 3000);
-  };
-
   const loadCatalog = async ({ silent = false } = {}) => {
     try {
       if (!silent) setLoading(true);
-      setError('');
       const [typesRes, featuresRes] = await Promise.all([
         propertyTypeService.getAll(),
         propertyTypeService.getFeatures(),
@@ -76,7 +70,7 @@ const AdminPropertyCatalog = () => {
       setFeatures(Array.isArray(featuresPayload) ? featuresPayload : featuresPayload.data || []);
     } catch (err) {
       console.error('Erreur lors du chargement du catalogue:', err);
-      setError(err.response?.data?.message || 'Impossible de charger le catalogue.');
+      toast.error(err.response?.data?.message || 'Impossible de charger le catalogue.');
     } finally {
       if (!silent) setLoading(false);
     }
@@ -126,11 +120,11 @@ const AdminPropertyCatalog = () => {
     try {
       await adminService.createPropertyType({ name: newType.trim() });
       setNewType('');
-      showNotice('Type de bien ajoute.');
+      toast.success('Type de bien ajoute.');
       await loadCatalog({ silent: true });
     } catch (err) {
       console.error('Erreur lors de la creation du type:', err);
-      setError(extractErrorMessage(err, 'Impossible de creer le type.'));
+      toast.error(extractErrorMessage(err, 'Impossible de creer le type.'));
     }
   };
 
@@ -139,11 +133,11 @@ const AdminPropertyCatalog = () => {
     try {
       await adminService.createPropertyFeature({ name: newFeature.trim(), category: newFeatureCategory });
       setNewFeature('');
-      showNotice('Caracteristique ajoutee.');
+      toast.success('Caracteristique ajoutee.');
       await loadCatalog({ silent: true });
     } catch (err) {
       console.error('Erreur lors de la creation de la caracteristique:', err);
-      setError(extractErrorMessage(err, 'Impossible de creer la caracteristique.'));
+      toast.error(extractErrorMessage(err, 'Impossible de creer la caracteristique.'));
     }
   };
 
@@ -174,11 +168,11 @@ const AdminPropertyCatalog = () => {
       await adminService.updatePropertyType(editingTypeId, { name: editingTypeName.trim() });
       setEditingTypeId(null);
       setEditingTypeName('');
-      showNotice('Type de bien mis a jour.');
+      toast.success('Type de bien mis a jour.');
       await loadCatalog({ silent: true });
     } catch (err) {
       console.error('Erreur lors de la mise a jour du type:', err);
-      setError(extractErrorMessage(err, 'Impossible de mettre a jour le type.'));
+      toast.error(extractErrorMessage(err, 'Impossible de mettre a jour le type.'));
     }
   };
 
@@ -191,11 +185,11 @@ const AdminPropertyCatalog = () => {
       });
       setEditingFeatureId(null);
       setEditingFeatureName('');
-      showNotice('Caracteristique mise a jour.');
+      toast.success('Caracteristique mise a jour.');
       await loadCatalog({ silent: true });
     } catch (err) {
       console.error('Erreur lors de la mise a jour de la caracteristique:', err);
-      setError(extractErrorMessage(err, 'Impossible de mettre a jour la caracteristique.'));
+      toast.error(extractErrorMessage(err, 'Impossible de mettre a jour la caracteristique.'));
     }
   };
 
@@ -203,11 +197,11 @@ const AdminPropertyCatalog = () => {
     if (!window.confirm('Supprimer ce type ?')) return;
     try {
       await adminService.deletePropertyType(id);
-      showNotice('Type de bien supprime.');
+      toast.success('Type de bien supprime.');
       await loadCatalog({ silent: true });
     } catch (err) {
       console.error('Erreur lors de la suppression du type:', err);
-      setError(extractErrorMessage(err, 'Impossible de supprimer le type.'));
+      toast.error(extractErrorMessage(err, 'Impossible de supprimer le type.'));
     }
   };
 
@@ -215,11 +209,11 @@ const AdminPropertyCatalog = () => {
     if (!window.confirm('Supprimer cette caracteristique ?')) return;
     try {
       await adminService.deletePropertyFeature(id);
-      showNotice('Caracteristique supprimee.');
+      toast.success('Caracteristique supprimee.');
       await loadCatalog({ silent: true });
     } catch (err) {
       console.error('Erreur lors de la suppression de la caracteristique:', err);
-      setError(extractErrorMessage(err, 'Impossible de supprimer la caracteristique.'));
+      toast.error(extractErrorMessage(err, 'Impossible de supprimer la caracteristique.'));
     }
   };
 
@@ -237,17 +231,6 @@ const AdminPropertyCatalog = () => {
                 Gerez les types de biens et les caracteristiques utilises dans les annonces.
               </p>
             </div>
-
-            {notice && (
-              <div className="surface-soft px-4 py-3 text-sm font-medium text-[rgb(var(--ink))] flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" /> {notice}
-              </div>
-            )}
-            {error && (
-              <div className="surface-panel p-4 text-sm text-[rgb(var(--clay))] flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 shrink-0" /> {error}
-              </div>
-            )}
 
             {loading ? (
               <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">

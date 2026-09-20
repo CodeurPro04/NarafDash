@@ -10,8 +10,10 @@ const PAGE_SIZE = 8;
 import { resolveMediaUrl } from '../../utils/media';
 import SecureImage from '../common/SecureImage';
 import { formatFcfa } from '../../utils/currency';
+import { useToast } from '../common/Toast';
 
 const ClientRequests = () => {
+  const toast = useToast();
   const { user } = useAuth();
   const location = useLocation();
   const [requests, setRequests] = useState([]);
@@ -260,16 +262,17 @@ const ClientRequests = () => {
         return;
       }
       await loadData({ silent: true });
+      toast.success('Demande approuvee avec succes.');
     } catch (error) {
       console.error('Erreur decision client:', error);
-      alert('Erreur lors de la decision');
+      toast.error('Erreur lors de la decision');
     }
   };
 
   const confirmReject = async () => {
     if (!rejectModal.item?.uuid) return;
     if (!rejectModal.reason.trim()) {
-      alert('Motif obligatoire.');
+      toast.warning('Motif obligatoire.');
       return;
     }
     try {
@@ -280,16 +283,17 @@ const ClientRequests = () => {
       }
       await loadData({ silent: true });
       setRejectModal({ open: false, item: null, reason: '' });
+      toast.success('Demande refusee avec succes.');
     } catch (error) {
       console.error('Erreur decision client:', error);
-      alert('Erreur lors de la decision');
+      toast.error('Erreur lors de la decision');
     }
   };
 
   const handleAssign = async (uuid) => {
     const agentId = assignments[uuid];
     if (!agentId) {
-      alert('Veuillez selectionner un agent');
+      toast.warning('Veuillez selectionner un agent');
       return;
     }
     try {
@@ -300,9 +304,10 @@ const ClientRequests = () => {
         await service.assignClientRequest(uuid, { agent_id: agentId });
       }
       await loadData({ silent: true });
+      toast.success('Agent assigne avec succes.');
     } catch (error) {
       console.error('Erreur assignation client:', error);
-      alert(error.response?.data?.message || 'Erreur lors de l\'assignation');
+      toast.error(error.response?.data?.message || 'Erreur lors de l\'assignation');
     }
   };
 

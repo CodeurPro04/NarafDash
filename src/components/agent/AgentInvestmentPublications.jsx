@@ -1,18 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
-import { agentService, countryService } from '../../services/api';
+import { agentService, countryService, partnershipLookupService } from '../../services/api';
 import { useAddressLocation } from '../../hooks/useAddressLocation';
+import { useToast } from '../common/Toast';
 import {
   Save, Plus, Upload, CheckCircle, XCircle, Clock, LocateFixed, Map as MapIcon,
   TrendingUp, Image, FileText,
 } from 'lucide-react';
 
 const AgentInvestmentPublications = () => {
+  const toast = useToast();
   const defaultImage =
     'https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=800&q=80';
   const [projects, setProjects] = useState([]);
   const [countries, setCountries] = useState([]);
+  const [partners, setPartners] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -27,6 +30,7 @@ const AgentInvestmentPublications = () => {
     location: '',
     city: '',
     country_id: '',
+    partner_id: '',
     latitude: '',
     longitude: '',
     total_investment: '',
@@ -105,6 +109,12 @@ const AgentInvestmentPublications = () => {
         setCountries(Array.isArray(payload) ? payload : payload.data || []);
       })
       .catch((err) => console.error('Erreur chargement pays:', err));
+    partnershipLookupService.getApproved('investisseur')
+      .then((res) => {
+        const payload = res?.data?.data ?? res?.data ?? [];
+        setPartners(Array.isArray(payload) ? payload : payload.data || []);
+      })
+      .catch((err) => console.error('Erreur chargement partenaires:', err));
   }, []);
 
   const loadProjects = async ({ silent = false } = {}) => {
@@ -180,6 +190,7 @@ const AgentInvestmentPublications = () => {
       location: project.location || '',
       city: project.city || '',
       country_id: project.country_id || project.country?.id || '',
+      partner_id: project.partner_id || project.partner?.id || '',
       latitude: project.latitude ?? '',
       longitude: project.longitude ?? '',
       total_investment: project.total_investment || '',
@@ -206,6 +217,7 @@ const AgentInvestmentPublications = () => {
       location: '',
       city: '',
       country_id: '',
+      partner_id: '',
       latitude: '',
       longitude: '',
       total_investment: '',
@@ -231,9 +243,10 @@ const AgentInvestmentPublications = () => {
         return { ...prev, [pathField]: (prev[pathField] || []).filter((item) => item !== path) };
       });
       loadProjects({ silent: true });
+      toast.success('Fichier supprime avec succes.');
     } catch (err) {
       console.error('Erreur suppression fichier:', err);
-      alert('Erreur lors de la suppression du fichier.');
+      toast.error('Erreur lors de la suppression du fichier.');
     }
   };
 
@@ -273,14 +286,18 @@ const AgentInvestmentPublications = () => {
     try {
       if (editingProject?.uuid) {
         await agentService.updateInvestmentPublication(editingProject.uuid, requestData);
+        toast.success('Projet modifie avec succes.');
       } else {
         await agentService.createInvestmentPublication(requestData);
+        toast.success('Projet cree avec succes.');
       }
       await loadProjects({ silent: true });
       resetForm();
     } catch (err) {
       console.error('Erreur enregistrement:', err);
-      setError(err.response?.data?.message || 'Erreur lors de l\'enregistrement.');
+      const message = err.response?.data?.message || 'Erreur lors de l\'enregistrement.';
+      setError(message);
+      toast.error(message);
     } finally {
       setSaving(false);
     }
@@ -404,6 +421,20 @@ const AgentInvestmentPublications = () => {
                           <option value="">Pays (optionnel)</option>
                           {countries.map((country) => (
                             <option key={country.id} value={country.id}>{country.flag ? `${country.flag} ` : ''}{country.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-2">Partenaire financier</label>
+                        <select
+                          name="partner_id"
+                          value={formData.partner_id}
+                          onChange={handleChange}
+                          className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
+                        >
+                          <option value="">Partenaire financier (optionnel)</option>
+                          {partners.map((partner) => (
+                            <option key={partner.id} value={partner.id}>{partner.company_name}</option>
                           ))}
                         </select>
                       </div>

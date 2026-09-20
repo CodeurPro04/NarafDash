@@ -7,9 +7,11 @@ import { resolveMediaUrl } from '../../utils/media';
 import SecureImage from '../common/SecureImage';
 import { Building, Edit, Trash2, Plus, Search, MapPin, Euro, Image } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useToast } from '../common/Toast';
 
 const MyProperties = () => {
   const navigate = useNavigate();
+  const toast = useToast();
   const location = useLocation();
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -60,9 +62,10 @@ const MyProperties = () => {
     try {
       await ownerService.deleteProperty(propertyUuid);
       setProperties((prev) => prev.filter((property) => property.uuid !== propertyUuid));
+      toast.success('Propriété supprimée avec succès.');
     } catch (error) {
       console.error('Erreur lors de la suppression:', error);
-      alert('Erreur lors de la suppression de la propriete');
+      toast.error('Erreur lors de la suppression de la propriete');
     }
   };
 

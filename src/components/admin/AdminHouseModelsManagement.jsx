@@ -18,6 +18,7 @@ import {
 import Header from "../common/Header";
 import Sidebar from "../common/Sidebar";
 import { adminService } from "../../services/api";
+import { useToast } from "../common/Toast";
 
 const PER_PAGE = 12;
 
@@ -52,6 +53,7 @@ const mapSectionItems = (items) => {
 const defaultSectionForm = {
   title: "",
   description: "",
+  enabled: true,
   videos: [""],
   showcaseSections: [
     {
@@ -78,13 +80,13 @@ const defaultSectionForm = {
 const AdminHouseModelsManagement = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const toast = useToast();
   const viewParam = new URLSearchParams(location.search).get("view");
 
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sectionSaving, setSectionSaving] = useState(false);
-  const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingModel, setEditingModel] = useState(null);
   const [formData, setFormData] = useState(emptyForm);
@@ -94,6 +96,7 @@ const AdminHouseModelsManagement = () => {
   const [removeGallery, setRemoveGallery] = useState([]);
   const [removeCover, setRemoveCover] = useState(false);
   const [sectionForm, setSectionForm] = useState(defaultSectionForm);
+  const [sectionToggling, setSectionToggling] = useState(false);
 
   const [searchInput, setSearchInput] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -154,7 +157,6 @@ const AdminHouseModelsManagement = () => {
   const loadModels = async ({ silent = false } = {}) => {
     try {
       if (!silent) setLoading(true);
-      setError("");
       const response = await adminService.getHouseModels({
         page,
         per_page: PER_PAGE,
@@ -179,6 +181,7 @@ const AdminHouseModelsManagement = () => {
         description:
           payload?.section?.description ||
           "Decouvrez nos modeles de maison, penses pour allier style, confort et fonctionnalite dans chaque projet.",
+        enabled: payload?.section?.enabled !== false,
         videos:
           Array.isArray(payload?.section?.videos) && payload.section.videos.length
             ? payload.section.videos
@@ -199,7 +202,7 @@ const AdminHouseModelsManagement = () => {
       });
     } catch (err) {
       console.error("Erreur chargement modeles:", err);
-      setError("Impossible de charger les modeles.");
+      toast.error("Impossible de charger les modeles.");
     } finally {
       if (!silent) setLoading(false);
     }
@@ -307,7 +310,6 @@ const AdminHouseModelsManagement = () => {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setSaving(true);
-    setError("");
 
     const requestData = new FormData();
     requestData.append("title", formData.title);
@@ -333,7 +335,8 @@ const AdminHouseModelsManagement = () => {
     });
 
     try {
-      if (editingModel?.uuid) {
+      const isEditing = Boolean(editingModel?.uuid);
+      if (isEditing) {
         await adminService.updateHouseModel(editingModel.uuid, requestData);
       } else {
         await adminService.createHouseModel(requestData);
@@ -341,9 +344,10 @@ const AdminHouseModelsManagement = () => {
       }
       resetForm();
       await loadModels({ silent: true });
+      toast.success(isEditing ? "Modele mis a jour avec succes." : "Modele cree avec succes.");
     } catch (err) {
       console.error("Erreur enregistrement modele:", err);
-      setError(
+      toast.error(
         err?.response?.data?.message || "Erreur lors de l'enregistrement.",
       );
     } finally {
@@ -358,9 +362,10 @@ const AdminHouseModelsManagement = () => {
     try {
       await adminService.deleteHouseModel(model.uuid);
       await loadModels({ silent: true });
+      toast.success("Modele supprime avec succes.");
     } catch (err) {
       console.error("Erreur suppression modele:", err);
-      setError("Erreur lors de la suppression.");
+      toast.error("Erreur lors de la suppression.");
     }
   };
 
@@ -403,12 +408,12 @@ const AdminHouseModelsManagement = () => {
   const handleSectionSubmit = async (event) => {
     event.preventDefault();
     setSectionSaving(true);
-    setError("");
 
     try {
       const response = await adminService.updateHouseModelsSection({
         section_title: sectionForm.title,
         section_description: sectionForm.description,
+        enabled: sectionForm.enabled,
         video_urls: sectionForm.videos.filter((video) =>
           String(video || "").trim(),
         ),
@@ -429,6 +434,7 @@ const AdminHouseModelsManagement = () => {
         setSectionForm({
           title: section.title || "",
           description: section.description || "",
+          enabled: section.enabled !== false,
           videos:
             Array.isArray(section.videos) && section.videos.length
               ? section.videos
@@ -448,14 +454,51 @@ const AdminHouseModelsManagement = () => {
               : defaultSectionForm.showcaseSections,
         });
       }
+      toast.success("Section mise a jour avec succes.");
     } catch (err) {
       console.error("Erreur enregistrement section modeles:", err);
-      setError(
+      toast.error(
         err?.response?.data?.message ||
           "Erreur lors de l'enregistrement de la section.",
       );
     } finally {
       setSectionSaving(false);
+    }
+  };
+
+  const handleToggleSectionEnabled = async () => {
+    const nextEnabled = !sectionForm.enabled;
+    try {
+      setSectionToggling(true);
+      await adminService.updateHouseModelsSection({
+        section_title: sectionForm.title,
+        section_description: sectionForm.description,
+        enabled: nextEnabled,
+        video_urls: sectionForm.videos.filter((video) =>
+          String(video || "").trim(),
+        ),
+        showcase_sections: sectionForm.showcaseSections.map((section) => ({
+          title: section.title,
+          button_label: section.button_label,
+          button_link: section.button_link,
+          items: section.items.map((item) => ({
+            title: item.title,
+            excerpt: item.excerpt,
+            image_url: item.image_url,
+            link: item.link,
+          })),
+        })),
+      });
+      setSectionForm((prev) => ({ ...prev, enabled: nextEnabled }));
+      toast.success(nextEnabled ? "Section activee avec succes." : "Section desactivee avec succes.");
+    } catch (err) {
+      console.error("Erreur activation/desactivation section modeles:", err);
+      toast.error(
+        err?.response?.data?.message ||
+          "Erreur lors de la mise a jour de la section.",
+      );
+    } finally {
+      setSectionToggling(false);
     }
   };
 
@@ -478,9 +521,40 @@ const AdminHouseModelsManagement = () => {
               </p>
             </div>
 
-            {error && (
-              <div className="surface-panel p-4 text-sm text-[rgb(var(--clay))]">
-                {error}
+            {!isCreateOnlyView && (
+              <div className="surface-panel p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span
+                    className={`shrink-0 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium whitespace-nowrap ${
+                      sectionForm.enabled
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-[rgba(199,109,74,0.12)] text-[rgb(var(--clay))]"
+                    }`}
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        sectionForm.enabled ? "bg-emerald-500" : "bg-[rgb(var(--clay))]"
+                      }`}
+                    />
+                    {sectionForm.enabled ? "Section active sur le site" : "Section desactivee"}
+                  </span>
+                  <p className="text-sm text-[rgba(15,42,46,0.6)] truncate">
+                    {sectionForm.enabled
+                      ? "La section \"Modeles de maison\" est visible sur la page d'accueil publique."
+                      : "La section \"Modeles de maison\" est masquee sur la page d'accueil publique."}
+                  </p>
+                </div>
+                <button
+                  onClick={handleToggleSectionEnabled}
+                  disabled={sectionToggling}
+                  className="btn-ghost text-xs shrink-0"
+                >
+                  {sectionToggling
+                    ? "Mise a jour..."
+                    : sectionForm.enabled
+                      ? "Desactiver la section"
+                      : "Activer la section"}
+                </button>
               </div>
             )}
 

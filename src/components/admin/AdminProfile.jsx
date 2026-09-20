@@ -3,6 +3,7 @@ import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
 import { profileService } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../common/Toast';
 import { resolveMediaUrl } from '../../utils/media';
 import {
   Save,
@@ -24,13 +25,10 @@ const getInitials = (firstName, lastName) => {
 
 const AdminProfile = () => {
   const { user, updateUser } = useAuth();
+  const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [passwordMessage, setPasswordMessage] = useState('');
-  const [passwordMessageIsError, setPasswordMessageIsError] = useState(false);
   const [profileData, setProfileData] = useState({
     first_name: '',
     last_name: '',
@@ -55,7 +53,6 @@ const AdminProfile = () => {
   const loadProfile = async () => {
     try {
       setLoading(true);
-      setError('');
       const response = await profileService.getProfile();
       const payload = response?.data?.data?.user || response?.data?.user;
       if (payload) {
@@ -72,7 +69,7 @@ const AdminProfile = () => {
       }
     } catch (err) {
       console.error('Erreur lors du chargement du profil:', err);
-      setError(err.response?.data?.message || 'Impossible de charger le profil.');
+      toast.error(err.response?.data?.message || 'Impossible de charger le profil.');
     } finally {
       setLoading(false);
     }
@@ -107,8 +104,6 @@ const AdminProfile = () => {
   const handleProfileSubmit = async (e) => {
     e.preventDefault();
     setSavingProfile(true);
-    setError('');
-    setSuccess('');
     try {
       const payload = new FormData();
       payload.append('first_name', profileData.first_name);
@@ -126,13 +121,12 @@ const AdminProfile = () => {
         }
       }
       setAvatarFile(null);
-      setSuccess('Profil mis a jour avec succes.');
-      setTimeout(() => setSuccess(''), 3500);
+      toast.success('Profil mis a jour avec succes.');
     } catch (err) {
       console.error('Erreur lors de la mise a jour du profil:', err);
       const apiErrors = err.response?.data?.errors;
       const details = apiErrors ? Object.values(apiErrors).flat().join(' ') : '';
-      setError(err.response?.data?.message || details || 'Erreur lors de la mise a jour du profil.');
+      toast.error(err.response?.data?.message || details || 'Erreur lors de la mise a jour du profil.');
     } finally {
       setSavingProfile(false);
     }
@@ -146,24 +140,19 @@ const AdminProfile = () => {
     e.preventDefault();
     if (passwordsFilled && !passwordsMatch) return;
     setSavingPassword(true);
-    setPasswordMessage('');
-    setPasswordMessageIsError(false);
     try {
       await profileService.changePassword(passwordData);
-      setPasswordMessage('Mot de passe mis a jour avec succes.');
-      setPasswordMessageIsError(false);
+      toast.success('Mot de passe mis a jour avec succes.');
       setPasswordData({
         current_password: '',
         new_password: '',
         new_password_confirmation: '',
       });
-      setTimeout(() => setPasswordMessage(''), 3500);
     } catch (err) {
       console.error('Erreur lors du changement de mot de passe:', err);
       const apiErrors = err.response?.data?.errors;
       const details = apiErrors ? Object.values(apiErrors).flat().join(' ') : '';
-      setPasswordMessage(err.response?.data?.message || details || 'Erreur lors du changement de mot de passe.');
-      setPasswordMessageIsError(true);
+      toast.error(err.response?.data?.message || details || 'Erreur lors du changement de mot de passe.');
     } finally {
       setSavingPassword(false);
     }
@@ -193,17 +182,6 @@ const AdminProfile = () => {
               </div>
             ) : (
               <>
-                {error && (
-                  <div className="surface-panel p-4 text-sm text-[rgb(var(--clay))] flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 shrink-0" /> {error}
-                  </div>
-                )}
-                {success && (
-                  <div className="surface-soft px-4 py-3 text-sm font-medium text-[rgb(var(--ink))] flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" /> {success}
-                  </div>
-                )}
-
                 {/* Hero */}
                 <div className="surface-panel p-6 sm:p-8">
                   <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 text-center sm:text-left">
@@ -320,12 +298,6 @@ const AdminProfile = () => {
                       <p className="text-xs text-[rgba(15,42,46,0.55)]">Utilisez un mot de passe d'au moins 8 caracteres.</p>
                     </div>
                   </div>
-                  {passwordMessage && (
-                    <div className={`text-sm flex items-center gap-2 ${passwordMessageIsError ? 'text-[rgb(var(--clay))]' : 'text-emerald-600'}`}>
-                      {passwordMessageIsError ? <AlertCircle className="h-4 w-4 shrink-0" /> : <CheckCircle2 className="h-4 w-4 shrink-0" />}
-                      {passwordMessage}
-                    </div>
-                  )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium mb-2">Mot de passe actuel *</label>

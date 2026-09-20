@@ -4,9 +4,11 @@ import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
 import { agentService } from '../../services/api';
 import { CheckCircle, FileText, XCircle, Plus } from 'lucide-react';
+import { useToast } from '../common/Toast';
 
 const PropertyRequests = () => {
   const navigate = useNavigate();
+  const toast = useToast();
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -39,9 +41,10 @@ const PropertyRequests = () => {
       setRequests((prev) => prev.map((request) => (
         request.uuid === uuid ? { ...request, status: 'agent_approved' } : request
       )));
+      toast.success('Demande approuvee avec succes.');
     } catch (err) {
       console.error('Erreur validation demande:', err);
-      alert('Erreur lors de la validation.');
+      toast.error('Erreur lors de la validation.');
     }
   };
 
@@ -52,9 +55,10 @@ const PropertyRequests = () => {
       setRequests((prev) => prev.map((request) => (
         request.uuid === uuid ? { ...request, status: 'agent_rejected', rejection_reason: reason.trim() } : request
       )));
+      toast.success('Demande rejetee avec succes.');
     } catch (err) {
       console.error('Erreur rejet demande:', err);
-      alert('Erreur lors du rejet.');
+      toast.error('Erreur lors du rejet.');
     }
   };
 

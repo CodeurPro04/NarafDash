@@ -4,15 +4,15 @@ import Sidebar from '../common/Sidebar';
 import { profileService } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { Save, Lock, UserCircle } from 'lucide-react';
+import { useToast } from '../common/Toast';
 
 const AgentProfile = () => {
   const { user, updateUser } = useAuth();
+  const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [passwordMessage, setPasswordMessage] = useState('');
   const [profileData, setProfileData] = useState({
     first_name: '',
     last_name: '',
@@ -66,7 +66,6 @@ const AgentProfile = () => {
     e.preventDefault();
     setSavingProfile(true);
     setError('');
-    setSuccess('');
     try {
       const payload = new FormData();
       payload.append('first_name', profileData.first_name);
@@ -83,12 +82,14 @@ const AgentProfile = () => {
           ...updated,
         });
       }
-      setSuccess('Profil mis a jour avec succes.');
+      toast.success('Profil mis a jour avec succes.');
     } catch (err) {
       console.error('Erreur lors de la mise a jour du profil:', err);
       const apiErrors = err.response?.data?.errors;
       const details = apiErrors ? Object.values(apiErrors).flat().join(' ') : '';
-      setError(err.response?.data?.message || details || 'Erreur lors de la mise a jour du profil.');
+      const message = err.response?.data?.message || details || 'Erreur lors de la mise a jour du profil.';
+      setError(message);
+      toast.error(message);
     } finally {
       setSavingProfile(false);
     }
@@ -97,10 +98,9 @@ const AgentProfile = () => {
   const handlePasswordSubmit = async (e) => {
     e.preventDefault();
     setSavingPassword(true);
-    setPasswordMessage('');
     try {
       await profileService.changePassword(passwordData);
-      setPasswordMessage('Mot de passe mis a jour avec succes.');
+      toast.success('Mot de passe mis a jour avec succes.');
       setPasswordData({
         current_password: '',
         new_password: '',
@@ -110,7 +110,7 @@ const AgentProfile = () => {
       console.error('Erreur lors du changement de mot de passe:', err);
       const apiErrors = err.response?.data?.errors;
       const details = apiErrors ? Object.values(apiErrors).flat().join(' ') : '';
-      setPasswordMessage(err.response?.data?.message || details || 'Erreur lors du changement de mot de passe.');
+      toast.error(err.response?.data?.message || details || 'Erreur lors du changement de mot de passe.');
     } finally {
       setSavingPassword(false);
     }
@@ -137,9 +137,6 @@ const AgentProfile = () => {
               <>
                 {error && (
                   <div className="surface-panel p-4 text-sm text-[rgb(var(--clay))]">{error}</div>
-                )}
-                {success && (
-                  <div className="surface-panel p-4 text-sm text-[rgb(var(--sage))]">{success}</div>
                 )}
 
                 <form onSubmit={handleProfileSubmit} className="surface-panel p-6 space-y-6">
@@ -213,9 +210,6 @@ const AgentProfile = () => {
                     <Lock className="h-5 w-5" />
                     <h2 className="text-lg font-semibold">Mot de passe</h2>
                   </div>
-                  {passwordMessage && (
-                    <div className="text-sm text-[rgb(var(--clay))]">{passwordMessage}</div>
-                  )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium mb-2">Mot de passe actuel</label>

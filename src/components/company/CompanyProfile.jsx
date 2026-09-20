@@ -3,13 +3,14 @@ import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
 import { companyService } from '../../services/api';
 import { Building2, Upload } from 'lucide-react';
+import { useToast } from '../common/Toast';
 
 const CompanyProfile = () => {
+  const toast = useToast();
   const [application, setApplication] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [logoFile, setLogoFile] = useState(null);
   const [formData, setFormData] = useState({
     company_name: '',
@@ -82,7 +83,6 @@ const CompanyProfile = () => {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
-    setSuccess('');
     setSaving(true);
 
     const payload = new FormData();
@@ -114,10 +114,11 @@ const CompanyProfile = () => {
         const data = response?.data?.data ?? response?.data ?? null;
         setApplication(data || null);
       }
-      setSuccess(application?.uuid ? 'Profil mis a jour. Le compte repasse en attente de validation administrateur.' : 'Profil mis a jour.');
+      toast.success(application?.uuid ? 'Profil mis a jour. Le compte repasse en attente de validation administrateur.' : 'Profil mis a jour.');
     } catch (err) {
       console.error('Erreur mise a jour profil:', err);
       setError('Erreur lors de la mise a jour.');
+      toast.error('Erreur lors de la mise a jour.');
     } finally {
       setSaving(false);
     }
@@ -148,10 +149,6 @@ const CompanyProfile = () => {
 
             {error && (
               <div className="surface-panel p-4 text-sm text-[rgb(var(--clay))]">{error}</div>
-            )}
-
-            {success && (
-              <div className="surface-panel p-4 text-sm text-emerald-600">{success}</div>
             )}
 
             <div className="surface-panel p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">

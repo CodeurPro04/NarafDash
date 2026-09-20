@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
-import { agentService } from '../../services/api';
+import { managerService } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../common/Toast';
 import { resolveMediaUrl } from '../../utils/media';
@@ -23,8 +23,8 @@ const ROLE_LABELS = {
 // Libelle affiche sous une bulle : nom + role (administrateur, gestionnaire,
 // ou specialite de l'agent) pour savoir precisement qui repond dans le fil.
 const getSenderLabel = (senderUser) => {
-  if (!senderUser) return 'Client';
-  const name = senderUser.full_name || 'Client';
+  if (!senderUser) return 'Utilisateur';
+  const name = senderUser.full_name || 'Utilisateur';
   const roleSlug = senderUser.role?.slug;
   if (ROLE_LABELS[roleSlug]) return `${name} · ${ROLE_LABELS[roleSlug]}`;
   if (roleSlug === 'agent') {
@@ -54,7 +54,7 @@ const formatMessageTime = (value) => {
   return `${date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} ${time}`;
 };
 
-const MessageManagement = () => {
+const ManagerMessageManagement = () => {
   const { user } = useAuth();
   const toast = useToast();
   const [messages, setMessages] = useState([]);
@@ -74,7 +74,7 @@ const MessageManagement = () => {
   const loadMessages = async ({ silent = false } = {}) => {
     try {
       if (!silent) setLoading(true);
-      const response = await agentService.getMessages();
+      const response = await managerService.getMessages();
       const payload = extractPayload(response);
       const list = payload.data || payload;
       setMessages(Array.isArray(list) ? list : []);
@@ -135,7 +135,7 @@ const MessageManagement = () => {
       const unread = groupMessages.some((item) => item.recipient_id === myId && !item.is_read);
       list.push({
         uuid: root.uuid,
-        otherParty: otherParty || { full_name: 'Client' },
+        otherParty: otherParty || { full_name: 'Utilisateur' },
         lastMessage: last,
         unread,
       });
@@ -151,7 +151,7 @@ const MessageManagement = () => {
     setThreadMessages([]);
     setThreadLoading(true);
     try {
-      const response = await agentService.getMessageThread(conversation.uuid);
+      const response = await managerService.getMessageThread(conversation.uuid);
       setThreadMessages(extractThread(response));
       loadMessages({ silent: true });
     } catch (error) {
@@ -163,7 +163,7 @@ const MessageManagement = () => {
 
   const refreshThread = async (uuid) => {
     try {
-      const response = await agentService.getMessageThread(uuid);
+      const response = await managerService.getMessageThread(uuid);
       setThreadMessages(extractThread(response));
     } catch (error) {
       // rafraichissement silencieux : on ignore les echecs ponctuels
@@ -175,7 +175,7 @@ const MessageManagement = () => {
     if (!text || !selectedConversation || sendingChat) return;
     setSendingChat(true);
     try {
-      await agentService.respondToMessage(selectedConversation.uuid, { message: text });
+      await managerService.replyToMessage(selectedConversation.uuid, { message: text });
       setChatDraft('');
       await refreshThread(selectedConversation.uuid);
       loadMessages({ silent: true });
@@ -194,13 +194,13 @@ const MessageManagement = () => {
   };
 
   const searchMessageableUsers = useCallback(async (search) => {
-    const response = await agentService.getMessageableUsers({ search });
+    const response = await managerService.getMessageableUsers({ search });
     return response?.data?.data ?? response?.data ?? [];
   }, []);
 
   const startNewConversation = async ({ recipient, message }) => {
     try {
-      const response = await agentService.sendMessage({ recipient_id: recipient.id, message });
+      const response = await managerService.sendMessage({ recipient_id: recipient.id, message });
       const created = response?.data?.data;
       setShowNewChat(false);
       toast.success('Conversation demarree.');
@@ -222,10 +222,10 @@ const MessageManagement = () => {
           <div className="max-w-7xl mx-auto space-y-8">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <p className="chip">Agent immobilier</p>
+                <p className="chip">Gestionnaire</p>
                 <h1 className="text-3xl font-semibold mt-3">Gestion des messages</h1>
                 <p className="text-sm text-[rgba(15,42,46,0.6)] mt-2">
-                  Discutez en temps reel avec vos clients, vos collegues et l'administration.
+                  Discutez en temps reel avec les agents, l'administration et vos interlocuteurs.
                 </p>
               </div>
               <button type="button" onClick={() => setShowNewChat(true)} className="btn-primary text-sm">
@@ -304,7 +304,7 @@ const MessageManagement = () => {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-2 mb-0.5">
                             <h3 className={`text-sm truncate ${conversation.unread ? 'font-bold' : 'font-semibold'}`}>
-                              {conversation.otherParty?.full_name || 'Client'}
+                              {conversation.otherParty?.full_name || 'Utilisateur'}
                             </h3>
                             <span className="text-[11px] text-[rgba(15,42,46,0.4)] shrink-0">
                               {formatMessageTime(conversation.lastMessage.created_at)}
@@ -348,7 +348,7 @@ const MessageManagement = () => {
                             {getInitials(selectedConversation.otherParty?.full_name)}
                           </div>
                         )}
-                        <p className="text-sm font-semibold">{selectedConversation.otherParty?.full_name || 'Client'}</p>
+                        <p className="text-sm font-semibold">{selectedConversation.otherParty?.full_name || 'Utilisateur'}</p>
                       </div>
                       <div ref={chatContainerRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-2 bg-[rgba(246,241,234,0.5)]">
                         {threadLoading ? (
@@ -418,4 +418,4 @@ const MessageManagement = () => {
   );
 };
 
-export default MessageManagement;
+export default ManagerMessageManagement;

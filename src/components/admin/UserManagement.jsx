@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
+import { useToast } from '../common/Toast';
 import { adminService, countryService } from '../../services/api';
 import {
   Plus,
@@ -50,6 +51,7 @@ const getRoleLabel = (role) => {
 const getRoleSlug = (user) => user?.role?.slug || reverseRoleMapping[user?.role?.name] || user?.role;
 
 const UserManagement = () => {
+  const toast = useToast();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -145,9 +147,10 @@ const UserManagement = () => {
     try {
       await adminService.deleteUser(user.id);
       await loadUsers({ silent: true });
+      toast.success('Utilisateur supprimé avec succès.');
     } catch (error) {
       console.error('Erreur lors de la suppression:', error);
-      alert("Erreur lors de la suppression de l'utilisateur.");
+      toast.error("Erreur lors de la suppression de l'utilisateur.");
     }
   };
 
@@ -155,23 +158,24 @@ const UserManagement = () => {
     try {
       await adminService.toggleUserStatus(user.id);
       await loadUsers({ silent: true });
+      toast.success('Statut mis à jour avec succès.');
     } catch (error) {
       console.error('Erreur lors du changement de statut:', error);
-      alert('Erreur lors du changement de statut.');
+      toast.error('Erreur lors du changement de statut.');
     }
   };
 
   const handleSaveUser = async (userData) => {
     if (!userData.first_name || !userData.last_name || !userData.email || !userData.role) {
-      alert('Tous les champs sont requis.');
+      toast.warning('Tous les champs sont requis.');
       return;
     }
     if (userData.role === 'agent' && !userData.agent_type) {
-      alert("Veuillez selectionner le type d'agent.");
+      toast.warning("Veuillez selectionner le type d'agent.");
       return;
     }
     if (!['gestionnaire', 'admin', 'administrateur'].includes(userData.role) && !userData.country_code) {
-      alert('Veuillez selectionner le pays de rattachement.');
+      toast.warning('Veuillez selectionner le pays de rattachement.');
       return;
     }
 
@@ -183,13 +187,14 @@ const UserManagement = () => {
         await adminService.createUser(userData);
       }
       setShowModal(false);
+      toast.success(editingUser ? 'Utilisateur mis à jour avec succès.' : 'Utilisateur créé avec succès.');
       setEditingUser(null);
       await loadUsers({ silent: true });
     } catch (error) {
       console.error('Erreur lors de la sauvegarde:', error);
       const apiErrors = error.response?.data?.errors;
       const details = apiErrors ? Object.values(apiErrors).flat().join(' ') : '';
-      alert(error.response?.data?.message || details || 'Erreur lors de la sauvegarde.');
+      toast.error(error.response?.data?.message || details || 'Erreur lors de la sauvegarde.');
     } finally {
       setSaving(false);
     }

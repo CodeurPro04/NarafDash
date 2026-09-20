@@ -5,11 +5,12 @@ import { ownerService, propertyTypeService } from '../../services/api';
 import { Building, Upload, MapPin, Euro, FileText, ArrowLeft, Save } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getTypeRules, resetHiddenFields } from '../../utils/propertyTypeRules';
+import { useToast } from '../common/Toast';
 
 const AddProperty = () => {
   const navigate = useNavigate();
+  const toast = useToast();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [types, setTypes] = useState([]);
   const [features, setFeatures] = useState([]);
   const [images, setImages] = useState([]);
@@ -148,11 +149,10 @@ const AddProperty = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
 
     if (images.length === 0) {
       setLoading(false);
-      setError('Veuillez ajouter au moins une image.');
+      toast.warning('Veuillez ajouter au moins une image.');
       return;
     }
 
@@ -184,12 +184,13 @@ const AddProperty = () => {
       });
 
       await ownerService.createProperty(payload);
+      toast.success('Propriété ajoutée avec succès.');
       navigate('/owner/properties');
     } catch (error) {
       console.error('Erreur lors de la creation:', error);
       const apiErrors = error.response?.data?.errors;
       const details = apiErrors ? Object.values(apiErrors).flat().join(' ') : '';
-      setError(error.response?.data?.message || details || 'Erreur lors de la creation de la propriete.');
+      toast.error(error.response?.data?.message || details || 'Erreur lors de la creation de la propriete.');
     } finally {
       setLoading(false);
     }
@@ -218,12 +219,6 @@ const AddProperty = () => {
                 </p>
               </div>
             </div>
-            {error && (
-              <div className="surface-panel p-4 text-sm text-[rgb(var(--clay))]">
-                {error}
-              </div>
-            )}
-
             <form onSubmit={handleSubmit} className="space-y-8">
               <div className="surface-panel p-6 space-y-6">
                 <h2 className="text-lg font-semibold flex items-center gap-2">

@@ -7,9 +7,11 @@ import SecureImage from '../common/SecureImage';
 import { Building, Upload, MapPin, Euro, FileText, ArrowLeft, Save, Trash2 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getTypeRules, resetHiddenFields } from '../../utils/propertyTypeRules';
+import { useToast } from '../common/Toast';
 
 const OwnerEditProperty = () => {
   const navigate = useNavigate();
+  const toast = useToast();
   const { uuid } = useParams();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -144,7 +146,7 @@ const OwnerEditProperty = () => {
       setExistingMedia((prev) => prev.filter((media) => media.id !== mediaId));
     } catch (error) {
       console.error('Erreur lors de la suppression du média:', error);
-      alert('Erreur lors de la suppression du média');
+      toast.error('Erreur lors de la suppression du média');
     }
   };
 
@@ -172,10 +174,11 @@ const OwnerEditProperty = () => {
         images.forEach((image) => mediaPayload.append('images[]', image));
         await ownerService.addPropertyImages(uuid, mediaPayload);
       }
+      toast.success('Propriété mise à jour avec succès.');
       navigate('/owner/properties');
     } catch (error) {
       console.error('Erreur lors de la mise à jour:', error);
-      alert('Erreur lors de la mise à jour');
+      toast.error('Erreur lors de la mise à jour');
     } finally {
       setSaving(false);
     }

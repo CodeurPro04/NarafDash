@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
-import { adminService, propertyTypeService, countryService } from '../../services/api';
+import { adminService, propertyTypeService, countryService, partnershipLookupService } from '../../services/api';
 import {
   Building,
   Trash2,
@@ -32,6 +32,7 @@ import { resolveMediaUrl } from '../../utils/media';
 import SecureImage from '../common/SecureImage';
 import { getTypeRules, resetHiddenFields } from '../../utils/propertyTypeRules';
 import { useAddressLocation } from '../../hooks/useAddressLocation';
+import { useToast } from '../common/Toast';
 
 const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
 const ACCEPTED_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'];
@@ -63,15 +64,18 @@ const initialFormData = {
   longitude: '',
   feature_ids: [],
   country_id: '',
+  partner_id: '',
 };
 
 const PER_PAGE = 12;
 
 const PropertyManagement = () => {
+  const toast = useToast();
   const location = useLocation();
   const [properties, setProperties] = useState([]);
   const [types, setTypes] = useState([]);
   const [countries, setCountries] = useState([]);
+  const [partners, setPartners] = useState([]);
   const [features, setFeatures] = useState([]);
   const [images, setImages] = useState([]);
   const [planImages, setPlanImages] = useState([]);
@@ -82,7 +86,6 @@ const PropertyManagement = () => {
   const [existingRender3DImages, setExistingRender3DImages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -144,17 +147,20 @@ const PropertyManagement = () => {
 
   const loadLookupData = async () => {
     try {
-      const [typesRes, featuresRes, countriesRes] = await Promise.all([
+      const [typesRes, featuresRes, countriesRes, partnersRes] = await Promise.all([
         propertyTypeService.getAll(),
         propertyTypeService.getFeatures(),
         countryService.getAll(),
+        partnershipLookupService.getApproved('immobilier'),
       ]);
       const typesPayload = extractPayload(typesRes);
       const featuresPayload = extractPayload(featuresRes);
       const countriesPayload = extractPayload(countriesRes);
+      const partnersPayload = extractPayload(partnersRes);
       setTypes(Array.isArray(typesPayload) ? typesPayload : typesPayload.data || []);
       setFeatures(Array.isArray(featuresPayload) ? featuresPayload : featuresPayload.data || []);
       setCountries(Array.isArray(countriesPayload) ? countriesPayload : countriesPayload.data || []);
+      setPartners(Array.isArray(partnersPayload) ? partnersPayload : partnersPayload.data || []);
     } catch (lookupError) {
       console.error('Erreur chargement referentiels:', lookupError);
     }
@@ -163,7 +169,6 @@ const PropertyManagement = () => {
   const loadProperties = async ({ silent = false } = {}) => {
     try {
       if (!silent) setLoading(true);
-      setError('');
       const response = await adminService.getAllProperties({
         page,
         per_page: PER_PAGE,
@@ -187,7 +192,7 @@ const PropertyManagement = () => {
       }
     } catch (loadError) {
       console.error('Erreur chargement proprietes:', loadError);
-      setError(loadError.response?.data?.message || 'Impossible de charger les proprietes.');
+      toast.error(loadError.response?.data?.message || 'Impossible de charger les proprietes.');
       setProperties([]);
     } finally {
       if (!silent) setLoading(false);
@@ -262,10 +267,10 @@ const PropertyManagement = () => {
       longitude: property.longitude ?? '',
       feature_ids: Array.isArray(property.features) ? property.features.map((feature) => feature.id) : [],
       country_id: property.country_id || property.country?.id || '',
+      partner_id: property.partner_id || property.partner?.id || '',
     });
     locationPicker.reset();
     setShowCreateForm(true);
-    setError('');
   };
 
   const handleRemoveExistingMedia = async (mediaItem, categorySetter) => {
@@ -274,9 +279,10 @@ const PropertyManagement = () => {
     try {
       await adminService.deletePropertyMedia(mediaItem.id);
       categorySetter((prev) => prev.filter((item) => item.id !== mediaItem.id));
+      toast.success('Visuel supprimé avec succès.');
     } catch (removeError) {
       console.error('Erreur suppression media:', removeError);
-      setError(removeError.response?.data?.message || 'Erreur lors de la suppression du visuel.');
+      toast.error(removeError.response?.data?.message || 'Erreur lors de la suppression du visuel.');
     }
   };
 
@@ -338,11 +344,10 @@ const PropertyManagement = () => {
     const files = Array.from(event.target.files || []);
     const validationMessage = validateFiles(files, 'Images standards');
     if (validationMessage) {
-      setError(validationMessage);
+      toast.warning(validationMessage);
       event.target.value = '';
       return;
     }
-    setError('');
     setImages((prev) => [...prev, ...files]);
     event.target.value = '';
   };
@@ -355,11 +360,10 @@ const PropertyManagement = () => {
     const files = Array.from(event.target.files || []);
     const validationMessage = validateFiles(files, 'Plans de construction');
     if (validationMessage) {
-      setError(validationMessage);
+      toast.warning(validationMessage);
       event.target.value = '';
       return;
     }
-    setError('');
     setPlanImages((prev) => [...prev, ...files]);
     event.target.value = '';
   };
@@ -372,11 +376,10 @@ const PropertyManagement = () => {
     const files = Array.from(event.target.files || []);
     const validationMessage = validateFiles(files, 'Representations 3D');
     if (validationMessage) {
-      setError(validationMessage);
+      toast.warning(validationMessage);
       event.target.value = '';
       return;
     }
-    setError('');
     setRender3DImages((prev) => [...prev, ...files]);
     event.target.value = '';
   };
@@ -420,40 +423,40 @@ const PropertyManagement = () => {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setSaving(true);
-    setError('');
     if (!editingProperty && images.length === 0) {
       setSaving(false);
-      setError('Veuillez ajouter au moins une image pour creer la propriete.');
+      toast.warning('Veuillez ajouter au moins une image pour creer la propriete.');
       return;
     }
     if (editingProperty && existingImages.length === 0 && images.length === 0) {
       setSaving(false);
-      setError('La propriete doit conserver au moins une image.');
+      toast.warning('La propriete doit conserver au moins une image.');
       return;
     }
 
     try {
       const standardValidation = validateFiles(images, 'Images standards');
       if (standardValidation) {
-        setError(standardValidation);
+        toast.warning(standardValidation);
         setSaving(false);
         return;
       }
 
       const planValidation = validateFiles(planImages, 'Plans de construction');
       if (planValidation) {
-        setError(planValidation);
+        toast.warning(planValidation);
         setSaving(false);
         return;
       }
 
       const renderValidation = validateFiles(render3DImages, 'Representations 3D');
       if (renderValidation) {
-        setError(renderValidation);
+        toast.warning(renderValidation);
         setSaving(false);
         return;
       }
 
+      const isEditing = Boolean(editingProperty?.uuid);
       const payload = new FormData();
       Object.entries(formData).forEach(([key, value]) => {
         if (key === 'feature_ids') {
@@ -480,11 +483,12 @@ const PropertyManagement = () => {
       setShowCreateForm(false);
       setPage(1);
       await loadProperties({ silent: true });
+      toast.success(isEditing ? 'Propriété mise à jour avec succès.' : 'Propriété créée avec succès.');
     } catch (creationError) {
       console.error('Erreur enregistrement propriete:', creationError);
       const apiErrors = creationError.response?.data?.errors;
       const details = apiErrors ? Object.values(apiErrors).flat().join(' ') : '';
-      setError(creationError.response?.data?.message || details || 'Impossible d\'enregistrer la propriete.');
+      toast.error(creationError.response?.data?.message || details || 'Impossible d\'enregistrer la propriete.');
     } finally {
       setSaving(false);
     }
@@ -495,9 +499,10 @@ const PropertyManagement = () => {
     try {
       await adminService.forceDeleteProperty(uuid);
       await loadProperties({ silent: true });
+      toast.success('Propriété supprimée avec succès.');
     } catch (deleteError) {
       console.error('Erreur suppression:', deleteError);
-      alert('Erreur lors de la suppression');
+      toast.error('Erreur lors de la suppression');
     }
   };
 
@@ -511,9 +516,10 @@ const PropertyManagement = () => {
       const payload = status === 'rejected' ? { status, rejection_reason: rejectionReason } : { status };
       await adminService.updatePropertyStatus(uuid, payload);
       await loadProperties({ silent: true });
+      toast.success(status === 'approved' ? 'Propriété validée avec succès.' : status === 'rejected' ? 'Propriété rejetée avec succès.' : 'Statut mis à jour avec succès.');
     } catch (updateError) {
       console.error('Erreur mise a jour statut:', updateError);
-      alert(updateError.response?.data?.message || 'Erreur lors de la mise a jour du statut');
+      toast.error(updateError.response?.data?.message || 'Erreur lors de la mise a jour du statut');
     }
   };
 
@@ -570,8 +576,6 @@ const PropertyManagement = () => {
                   : 'Consultez, recherchez et validez les annonces de la plateforme.'}
               </p>
             </div>
-
-            {error && !showCreateForm && <div className="surface-panel p-4 text-sm text-[rgb(var(--clay))]">{error}</div>}
 
             {!isCreateOnlyView && (
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -837,6 +841,12 @@ const PropertyManagement = () => {
                             <option key={country.id} value={country.id}>{country.flag ? `${country.flag} ` : ''}{country.name}</option>
                           ))}
                         </select>
+                        <select name="partner_id" value={formData.partner_id} onChange={handleInputChange} className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]">
+                          <option value="">Partenaire (optionnel)</option>
+                          {partners.map((partner) => (
+                            <option key={partner.id} value={partner.id}>{partner.company_name}</option>
+                          ))}
+                        </select>
                         <input type="text" name="commune" value={formData.commune} onChange={handleInputChange} placeholder="Commune" className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]" />
                         <input type="text" name="quartier" value={formData.quartier} onChange={handleInputChange} placeholder="Quartier" className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]" />
                       </div>
@@ -954,10 +964,6 @@ const PropertyManagement = () => {
                         ))}
                       </ul>
                     </div>
-
-                    {error && (
-                      <div className="surface-panel p-4 text-sm text-[rgb(var(--clay))]">{error}</div>
-                    )}
 
                     <div className="surface-panel p-5 space-y-2.5">
                       <button type="submit" disabled={saving} className="btn-primary w-full justify-center">

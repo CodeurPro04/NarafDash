@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
 import { adminService } from '../../services/api';
+import { useToast } from '../common/Toast';
 import {
   Banknote,
   Building,
@@ -84,9 +85,9 @@ const dealAgentName = (deal) =>
   deal.agent ? `${deal.agent.first_name || ''} ${deal.agent.last_name || ''}`.trim() || deal.agent.name || 'Agent' : 'Non renseigne';
 
 const AdminReports = () => {
+  const toast = useToast();
   const [deals, setDeals] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
 
   const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -108,7 +109,6 @@ const AdminReports = () => {
     const loadDeals = async () => {
       try {
         setLoading(true);
-        setError('');
         const [clientResponse, searchResponse] = await Promise.all([
           adminService.getClientRequestHistory(),
           adminService.getSearchRequestHistory(),
@@ -144,7 +144,7 @@ const AdminReports = () => {
         setDeals(concludedDeals);
       } catch (err) {
         console.error('Erreur lors du chargement des gains admin:', err);
-        setError('Impossible de charger les gains.');
+        toast.error('Impossible de charger les gains.');
       } finally {
         setLoading(false);
       }
@@ -229,10 +229,6 @@ const AdminReports = () => {
                 Vue globale des gains generes a partir des offres conclues et des prix finaux renseignes par les agents.
               </p>
             </div>
-
-            {error && (
-              <div className="surface-panel p-4 text-sm text-[rgb(var(--clay))]">{error}</div>
-            )}
 
             {loading ? (
               <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">

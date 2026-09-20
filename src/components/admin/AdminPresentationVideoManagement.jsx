@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
 import { adminService } from '../../services/api';
+import { useToast } from '../common/Toast';
 import { Save, Plus, X, PlayCircle, Link2, Video } from 'lucide-react';
 
 const getYoutubeThumbnail = (url) => {
@@ -18,11 +19,10 @@ const defaultForm = {
 };
 
 const AdminPresentationVideoManagement = () => {
+  const toast = useToast();
   const [form, setForm] = useState(defaultForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [brokenThumbs, setBrokenThumbs] = useState({});
 
   useEffect(() => {
@@ -41,7 +41,7 @@ const AdminPresentationVideoManagement = () => {
       });
     } catch (err) {
       console.error('Erreur chargement section videos de presentation:', err);
-      setError('Impossible de charger le contenu actuel.');
+      toast.error('Impossible de charger le contenu actuel.');
     } finally {
       setLoading(false);
     }
@@ -68,8 +68,6 @@ const AdminPresentationVideoManagement = () => {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setSaving(true);
-    setError('');
-    setSuccess('');
     try {
       const payload = {
         title: form.title,
@@ -83,10 +81,10 @@ const AdminPresentationVideoManagement = () => {
         description: data.description || defaultForm.description,
         videos: Array.isArray(data.videos) && data.videos.length ? data.videos : [''],
       });
-      setSuccess('Section mise a jour avec succes.');
+      toast.success('Section mise a jour avec succes.');
     } catch (err) {
       console.error('Erreur enregistrement section videos de presentation:', err);
-      setError(err.response?.data?.message || "Erreur lors de l'enregistrement.");
+      toast.error(err.response?.data?.message || "Erreur lors de l'enregistrement.");
     } finally {
       setSaving(false);
     }
@@ -116,9 +114,6 @@ const AdminPresentationVideoManagement = () => {
                 Configurez le titre, le sous-titre et les videos affiches dans la section "Videos de presentation" de la page d'accueil.
               </p>
             </div>
-
-            {error && <div className="surface-panel p-4 text-sm text-[rgb(var(--clay))]">{error}</div>}
-            {success && <div className="surface-panel p-4 text-sm text-emerald-700">{success}</div>}
 
             {loading ? (
               <div className="surface-panel p-8 text-center text-sm text-[rgba(15,42,46,0.5)]">Chargement...</div>

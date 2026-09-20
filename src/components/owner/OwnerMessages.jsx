@@ -3,8 +3,10 @@ import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
 import { ownerService } from '../../services/api';
 import { MessageSquare, Mail, User, Search, Trash2, Calendar, Send } from 'lucide-react';
+import { useToast } from '../common/Toast';
 
 const OwnerMessages = () => {
+  const toast = useToast();
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -61,9 +63,10 @@ const OwnerMessages = () => {
       setReplyText('');
       setSelectedMessage(null);
       await loadMessages({ silent: true });
+      toast.success('Message envoyé avec succès.');
     } catch (error) {
       console.error('Erreur lors de l\'envoi:', error);
-      alert('Erreur lors de l\'envoi de la réponse');
+      toast.error('Erreur lors de l\'envoi de la réponse');
     }
   };
 
@@ -75,9 +78,10 @@ const OwnerMessages = () => {
       if (selectedMessage?.uuid === messageUuid) {
         setSelectedMessage(null);
       }
+      toast.success('Message supprimé avec succès.');
     } catch (error) {
       console.error('Erreur lors de la suppression:', error);
-      alert('Erreur lors de la suppression du message');
+      toast.error('Erreur lors de la suppression du message');
     }
   };
 

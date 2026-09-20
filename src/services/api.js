@@ -223,6 +223,17 @@ export const adminService = {
   updatePresentationVideo: (data) =>
     api.post("/v1/admin/presentation-video", data),
 
+  // Publicite des menus de la navbar (texte ou image par menu)
+  getNavAds: () => api.get("/v1/admin/nav-ads"),
+  updateNavAd: (data) =>
+    api.post(
+      "/v1/admin/nav-ads",
+      data,
+      data instanceof FormData
+        ? { headers: { "Content-Type": "multipart/form-data" } }
+        : undefined,
+    ),
+
   // Partenariats
   getPendingPartnerships: () => api.get("/v1/admin/partnerships/pending"),
   approvePartnership: (uuid) =>
@@ -454,6 +465,14 @@ export const managerService = {
     api.post(`/v1/gestionnaire/client-requests/${uuid}/reject`, data),
   assignClientRequest: (uuid, data) =>
     api.post(`/v1/gestionnaire/client-requests/${uuid}/assign`, data),
+
+  // Messages
+  getMessages: () => api.get("/v1/gestionnaire/messages", { params: { per_page: 100 } }),
+  sendMessage: (data) => api.post("/v1/gestionnaire/messages", data),
+  getMessageThread: (uuid) => api.get(`/v1/gestionnaire/messages/${uuid}`),
+  replyToMessage: (uuid, data) =>
+    api.post(`/v1/gestionnaire/messages/${uuid}/reply`, data),
+  getMessageableUsers: (params) => api.get("/v1/messages/users", { params }),
 };
 
 // ====================
@@ -476,11 +495,13 @@ export const agentService = {
   deletePropertyMedia: (id) => api.delete(`/v1/agent/properties/media/${id}`),
 
   // Messages clients
-  getMessages: () => api.get("/v1/agent/messages"),
+  getMessages: () => api.get("/v1/agent/messages", { params: { per_page: 100 } }),
   sendMessage: (data) => api.post("/v1/agent/messages", data),
+  getMessageThread: (uuid) => api.get(`/v1/agent/messages/${uuid}`),
   respondToMessage: (uuid, data) =>
     api.post(`/v1/agent/messages/${uuid}/respond`, data),
   markMessageAsRead: (uuid) => api.post(`/v1/agent/messages/${uuid}/mark-read`),
+  getMessageableUsers: (params) => api.get("/v1/messages/users", { params }),
 
   // Demandes de recherche
   getAssignedSearchRequests: () =>
@@ -551,6 +572,14 @@ export const agentService = {
     ),
   updateInvestmentPublication: (uuid, data) =>
     apiUpdate(`/v1/agent/investments/publications/${uuid}`, data),
+
+  // Propositions d'investissement a traiter (agent investissement)
+  getInvestmentProposals: (params) =>
+    api.get("/v1/agent/investments/proposals", { params }),
+  approveInvestmentProposal: (uuid) =>
+    api.post(`/v1/agent/investments/proposals/${uuid}/approve`),
+  rejectInvestmentProposal: (uuid, data) =>
+    api.post(`/v1/agent/investments/proposals/${uuid}/reject`, data),
 };
 
 // ====================
@@ -634,6 +663,13 @@ export const partnerProductService = {
   getAll: (params) => api.get("/v1/admin/partner-products/all", { params }),
   approve: (uuid) => api.post(`/v1/admin/partner-products/${uuid}/approve`),
   reject: (uuid, reason) => api.post(`/v1/admin/partner-products/${uuid}/reject`, { reason }),
+};
+
+// Partenaires approuves — liste allegee pour rattacher un partenaire
+// (immobilier / constructeur / investisseur) a un bien/projet
+export const partnershipLookupService = {
+  getApproved: (type) =>
+    api.get("/v1/partnerships/lookup", { params: type ? { type } : undefined }),
 };
 
 export const companyService = {

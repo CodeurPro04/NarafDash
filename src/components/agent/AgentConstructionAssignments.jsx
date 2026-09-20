@@ -5,9 +5,11 @@ import { agentService } from '../../services/api';
 import { HardHat, Send, MessageSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { formatFcfa } from '../../utils/currency';
+import { useToast } from '../common/Toast';
 
 const AgentConstructionAssignments = () => {
   const navigate = useNavigate();
+  const toast = useToast();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -53,6 +55,7 @@ const AgentConstructionAssignments = () => {
     const draft = quoteDrafts[project.uuid] || {};
     if (!draft.amount) {
       setError('Veuillez saisir un montant pour le devis.');
+      toast.warning('Veuillez saisir un montant pour le devis.');
       return;
     }
     try {
@@ -73,15 +76,18 @@ const AgentConstructionAssignments = () => {
       )));
       updateDraft(project.uuid, 'amount', '');
       updateDraft(project.uuid, 'details', '');
+      toast.success('Devis envoye avec succes.');
     } catch (err) {
       console.error('Erreur lors de la creation du devis:', err);
       setError('Erreur lors de la creation du devis.');
+      toast.error('Erreur lors de la creation du devis.');
     }
   };
 
   const handleOpenMessage = (project) => {
     if (!project.user?.id) {
       setError('Impossible de trouver le client.');
+      toast.warning('Impossible de trouver le client.');
       return;
     }
     setMessageTarget(project);
@@ -101,9 +107,11 @@ const AgentConstructionAssignments = () => {
       setMessageTarget(null);
       setMessageSubject('');
       setMessageBody('');
+      toast.success('Message envoye avec succes.');
     } catch (err) {
       console.error('Erreur lors de l\'envoi du message:', err);
       setError('Erreur lors de l\'envoi du message.');
+      toast.error('Erreur lors de l\'envoi du message.');
     } finally {
       setSendingMessage(false);
     }

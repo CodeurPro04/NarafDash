@@ -16,10 +16,12 @@ import {
   Flag,
   Handshake,
 } from 'lucide-react';
+import { useToast } from '../common/Toast';
 
 const AgentAssignments = () => {
   const { user } = useAuth();
   const location = useLocation();
+  const toast = useToast();
   const agentType = normalizeAgentType(user?.agent_type || user?.agentType);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -270,6 +272,7 @@ const AgentAssignments = () => {
     const content = (draft.content || '').trim();
     if (!content) {
       setError('Le rapport d\'avancement doit contenir un detail.');
+      toast.warning('Le rapport d\'avancement doit contenir un detail.');
       return;
     }
 
@@ -286,9 +289,11 @@ const AgentAssignments = () => {
         [uuid]: { content: '', summary: '', client_feedback: '', next_step: '' },
       }));
       await loadAll({ silent: true });
+      toast.success('Rapport envoye avec succes.');
     } catch (err) {
       console.error('Erreur envoi rapport client:', err);
       setError(err.response?.data?.message || 'Impossible d envoyer le rapport a l administrateur.');
+      toast.error(err.response?.data?.message || 'Impossible d envoyer le rapport a l administrateur.');
     }
   };
 
@@ -299,10 +304,12 @@ const AgentAssignments = () => {
     const closureNote = (draft.closure_note || '').trim();
     if (!content) {
       setError('Le rapport final est obligatoire pour conclure le deal.');
+      toast.warning('Le rapport final est obligatoire pour conclure le deal.');
       return;
     }
     if (!closureNote) {
       setConclusionModal((prev) => ({ ...prev, error: 'La note de conclusion est obligatoire.' }));
+      toast.warning('La note de conclusion est obligatoire.');
       return;
     }
 
@@ -320,12 +327,15 @@ const AgentAssignments = () => {
       }));
       setConclusionModal({ open: false, uuid: '', item: null, error: '' });
       await loadAll({ silent: true });
+      toast.success('Offre conclue avec succes.');
     } catch (err) {
       console.error('Erreur conclusion offre client:', err);
+      const message = err.response?.data?.message || 'Impossible d envoyer la conclusion a l administrateur.';
       setConclusionModal((prev) => ({
         ...prev,
-        error: err.response?.data?.message || 'Impossible d envoyer la conclusion a l administrateur.',
+        error: message,
       }));
+      toast.error(message);
     }
   };
 
@@ -334,9 +344,11 @@ const AgentAssignments = () => {
       setProcessingClientUuid(uuid);
       await agentService.approveClientRequest(uuid);
       await loadAll({ silent: true });
+      toast.success('Demande client approuvee avec succes.');
     } catch (err) {
       console.error('Erreur approbation client:', err);
       setError(err.response?.data?.message || 'Impossible d\'approuver cette demande client.');
+      toast.error(err.response?.data?.message || 'Impossible d\'approuver cette demande client.');
     } finally {
       setProcessingClientUuid('');
     }
@@ -355,6 +367,7 @@ const AgentAssignments = () => {
     const reason = rejectModal.reason.trim();
     if (!reason) {
       setRejectModal((prev) => ({ ...prev, error: 'Le motif du refus est obligatoire.' }));
+      toast.warning('Le motif du refus est obligatoire.');
       return;
     }
 
@@ -363,9 +376,11 @@ const AgentAssignments = () => {
       await agentService.rejectClientRequest(rejectModal.uuid, { rejection_reason: reason });
       await loadAll({ silent: true });
       setRejectModal({ open: false, uuid: '', reason: '', error: '' });
+      toast.success('Demande client refusee avec succes.');
     } catch (err) {
       console.error('Erreur refus client:', err);
       setError(err.response?.data?.message || 'Impossible de refuser cette demande client.');
+      toast.error(err.response?.data?.message || 'Impossible de refuser cette demande client.');
     } finally {
       setProcessingClientUuid('');
     }

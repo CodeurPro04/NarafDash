@@ -2,10 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
-import { adminService, managerService, publicConstructionService, countryService } from '../../services/api';
+import { adminService, managerService, publicConstructionService, countryService, partnershipLookupService } from '../../services/api';
 import { formatFcfaRange } from '../../utils/currency';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAddressLocation } from '../../hooks/useAddressLocation';
+import { useToast } from '../common/Toast';
 import {
   Save,
   Trash2,
@@ -39,6 +40,7 @@ const getYoutubeThumbnail = (url) => {
 const PER_PAGE = 12;
 
 const ConstructionManagement = () => {
+  const toast = useToast();
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -49,7 +51,6 @@ const ConstructionManagement = () => {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
   const [editingProject, setEditingProject] = useState(null);
   const [pendingPublications, setPendingPublications] = useState([]);
   const [existingImages, setExistingImages] = useState([]);
@@ -90,10 +91,12 @@ const ConstructionManagement = () => {
     location: '',
     city: '',
     country_id: '',
+    partner_id: '',
     latitude: '',
     longitude: '',
   });
   const [countries, setCountries] = useState([]);
+  const [partners, setPartners] = useState([]);
   const locationPicker = useAddressLocation({
     onResolved: ({ address, city, lat, lng }) => {
       setFormData((prev) => ({
@@ -130,6 +133,12 @@ const ConstructionManagement = () => {
         setCountries(Array.isArray(payload) ? payload : payload.data || []);
       })
       .catch((err) => console.error('Erreur chargement pays:', err));
+    partnershipLookupService.getApproved('constructeur')
+      .then((res) => {
+        const payload = res?.data?.data ?? res?.data ?? [];
+        setPartners(Array.isArray(payload) ? payload : []);
+      })
+      .catch((err) => console.error('Erreur chargement partenaires:', err));
   }, []);
 
   useEffect(() => {
@@ -153,6 +162,7 @@ const ConstructionManagement = () => {
         location: '',
         city: '',
         country_id: '',
+        partner_id: '',
     latitude: '',
     longitude: '',
       });
@@ -223,7 +233,6 @@ const ConstructionManagement = () => {
   const loadProjects = async ({ silent = false } = {}) => {
     try {
       if (!silent) setLoading(true);
-      setError('');
       const response = await service.getAllConstructionProjects({
         page,
         per_page: PER_PAGE,
@@ -246,7 +255,7 @@ const ConstructionManagement = () => {
       }
     } catch (err) {
       console.error('Erreur chargement projets:', err);
-      setError('Impossible de charger les projets.');
+      toast.error('Impossible de charger les projets.');
       setProjects([]);
     } finally {
       if (!silent) setLoading(false);
@@ -282,6 +291,7 @@ const ConstructionManagement = () => {
       location: project.location || '',
       city: project.city || '',
       country_id: project.country_id || project.country?.id || '',
+      partner_id: project.partner_id || project.partner?.id || '',
       latitude: project.latitude ?? '',
       longitude: project.longitude ?? '',
     });
@@ -306,6 +316,7 @@ const ConstructionManagement = () => {
       location: '',
       city: '',
       country_id: '',
+      partner_id: '',
     latitude: '',
     longitude: '',
     });
@@ -355,9 +366,10 @@ const ConstructionManagement = () => {
     try {
       await service.updateConstructionProject(editingProject.uuid, { remove_images: [path] });
       setExistingImages((prev) => prev.filter((item) => item !== path));
+      toast.success('Image supprimee avec succes.');
     } catch (err) {
       console.error("Erreur lors de la suppression de l'image:", err);
-      setError("Erreur lors de la suppression de l'image.");
+      toast.error("Erreur lors de la suppression de l'image.");
     }
   };
 
@@ -367,9 +379,10 @@ const ConstructionManagement = () => {
     try {
       await service.updateConstructionProject(editingProject.uuid, { remove_plans: [path] });
       setExistingPlans((prev) => prev.filter((item) => item !== path));
+      toast.success('Plan supprime avec succes.');
     } catch (err) {
       console.error("Erreur lors de la suppression du plan:", err);
-      setError("Erreur lors de la suppression du plan.");
+      toast.error("Erreur lors de la suppression du plan.");
     }
   };
 
@@ -379,16 +392,16 @@ const ConstructionManagement = () => {
     try {
       await service.updateConstructionProject(editingProject.uuid, { remove_render_3d: [path] });
       setExistingRender3D((prev) => prev.filter((item) => item !== path));
+      toast.success('Visuel 3D supprime avec succes.');
     } catch (err) {
       console.error('Erreur lors de la suppression du visuel 3D:', err);
-      setError('Erreur lors de la suppression du visuel 3D.');
+      toast.error('Erreur lors de la suppression du visuel 3D.');
     }
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setSaving(true);
-    setError('');
     try {
       const payload = {
         ...formData,
@@ -396,6 +409,7 @@ const ConstructionManagement = () => {
         budget_max: formData.budget_max ? Number(formData.budget_max) : null,
         surface_area: formData.surface_area ? Number(formData.surface_area) : null,
         country_id: formData.country_id || null,
+        partner_id: formData.partner_id || null,
         latitude: formData.latitude !== '' ? Number(formData.latitude) : null,
         longitude: formData.longitude !== '' ? Number(formData.longitude) : null,
       };
@@ -413,16 +427,18 @@ const ConstructionManagement = () => {
         render3DFiles.forEach((file) => requestData.append('render_3d[]', file));
       }
 
-      if (editingProject?.uuid) {
+      const isEditing = Boolean(editingProject?.uuid);
+      if (isEditing) {
         await service.updateConstructionProject(editingProject.uuid, requestData);
       } else {
         await service.createConstructionProject(requestData);
       }
       await refreshData();
       resetForm();
+      toast.success(isEditing ? 'Projet mis a jour avec succes.' : 'Projet cree avec succes.');
     } catch (err) {
       console.error('Erreur enregistrement:', err);
-      setError(err.response?.data?.message || 'Erreur lors de l\'enregistrement.');
+      toast.error(err.response?.data?.message || 'Erreur lors de l\'enregistrement.');
     } finally {
       setSaving(false);
     }
@@ -434,9 +450,10 @@ const ConstructionManagement = () => {
     try {
       await service.deleteConstructionProject(project.uuid);
       await refreshData();
+      toast.success('Projet supprime avec succes.');
     } catch (err) {
       console.error('Erreur suppression:', err);
-      setError('Erreur lors de la suppression.');
+      toast.error('Erreur lors de la suppression.');
     }
   };
 
@@ -457,7 +474,6 @@ const ConstructionManagement = () => {
     event.preventDefault();
     if (user?.role !== 'admin') return;
     setSpotlightSaving(true);
-    setError('');
 
     try {
       const payload = {
@@ -469,7 +485,7 @@ const ConstructionManagement = () => {
       };
 
       if (payload.videos.length !== 2) {
-        setError('Veuillez renseigner exactement deux videos avec lien, titre et description.');
+        toast.warning('Veuillez renseigner exactement deux videos avec lien, titre et description.');
         setSpotlightSaving(false);
         return;
       }
@@ -487,9 +503,10 @@ const ConstructionManagement = () => {
           })),
         });
       }
+      toast.success('Section video enregistree avec succes.');
     } catch (err) {
       console.error('Erreur enregistrement spotlight construction:', err);
-      setError(err.response?.data?.message || 'Erreur lors de l’enregistrement du contenu video.');
+      toast.error(err.response?.data?.message || 'Erreur lors de l’enregistrement du contenu video.');
     } finally {
       setSpotlightSaving(false);
     }
@@ -557,9 +574,10 @@ const ConstructionManagement = () => {
     try {
       await service.updateConstructionProject(project.uuid, { status: 'published' });
       await refreshData();
+      toast.success('Projet approuve avec succes.');
     } catch (err) {
       console.error('Erreur approbation:', err);
-      setError('Erreur lors de l\'approbation.');
+      toast.error('Erreur lors de l\'approbation.');
     }
   };
 
@@ -575,7 +593,7 @@ const ConstructionManagement = () => {
   const confirmReject = async () => {
     if (!rejectModal.project?.uuid) return;
     if (!rejectModal.reason.trim()) {
-      alert('Motif obligatoire.');
+      toast.warning('Motif obligatoire.');
       return;
     }
     try {
@@ -585,9 +603,10 @@ const ConstructionManagement = () => {
       });
       setRejectModal({ open: false, project: null, reason: '' });
       await refreshData();
+      toast.success('Projet rejete avec succes.');
     } catch (err) {
       console.error('Erreur rejet:', err);
-      setError('Erreur lors du rejet.');
+      toast.error('Erreur lors du rejet.');
     }
   };
 
@@ -615,10 +634,6 @@ const ConstructionManagement = () => {
                     : 'Consultez, recherchez et validez les projets de construction du catalogue.'}
               </p>
             </div>
-
-            {error && (
-              <div className="surface-panel p-4 text-sm text-[rgb(var(--clay))]">{error}</div>
-            )}
 
             {isVideoOnlyView && user?.role !== 'admin' && (
               <div className="surface-panel p-6 text-sm text-[rgba(15,42,46,0.6)]">
@@ -939,6 +954,20 @@ const ConstructionManagement = () => {
                             <option value="">Pays (optionnel)</option>
                             {countries.map((country) => (
                               <option key={country.id} value={country.id}>{country.flag ? `${country.flag} ` : ''}{country.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-2">Partenaire</label>
+                          <select
+                            name="partner_id"
+                            value={formData.partner_id}
+                            onChange={handleChange}
+                            className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
+                          >
+                            <option value="">Partenaire (optionnel)</option>
+                            {partners.map((partner) => (
+                              <option key={partner.id} value={partner.id}>{partner.company_name}</option>
                             ))}
                           </select>
                         </div>

@@ -3,8 +3,11 @@ import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
 import { publicInvestmentService, investorService } from '../../services/api';
 import { TrendingUp, MapPin, Wallet } from 'lucide-react';
+import { useToast } from '../common/Toast';
+import { formatFcfa } from '../../utils/currency';
 
 const InvestorOpportunities = () => {
+  const toast = useToast();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -45,6 +48,7 @@ const InvestorOpportunities = () => {
     if (!selectedProject) return;
     if (!proposal.amount) {
       setError('Veuillez saisir un montant.');
+      toast.warning('Veuillez saisir un montant.');
       return;
     }
     try {
@@ -55,11 +59,14 @@ const InvestorOpportunities = () => {
         message: proposal.message || null,
       });
       setShowModal(false);
+      toast.success('Proposition envoyee avec succes.');
     } catch (err) {
       console.error('Erreur envoi proposition:', err);
       const apiErrors = err.response?.data?.errors;
       const details = apiErrors ? Object.values(apiErrors).flat().join(' ') : '';
-      setError(err.response?.data?.message || details || 'Erreur lors de la proposition.');
+      const message = err.response?.data?.message || details || 'Erreur lors de la proposition.';
+      setError(message);
+      toast.error(message);
     } finally {
       setSaving(false);
     }

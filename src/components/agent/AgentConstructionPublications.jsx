@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
-import { agentService, countryService } from '../../services/api';
+import { agentService, countryService, partnershipLookupService } from '../../services/api';
 import { useAddressLocation } from '../../hooks/useAddressLocation';
+import { useToast } from '../common/Toast';
 import {
   Save,
   Image as ImageIcon,
@@ -17,6 +18,7 @@ import {
 } from 'lucide-react';
 
 const AgentConstructionPublications = () => {
+  const toast = useToast();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -29,6 +31,7 @@ const AgentConstructionPublications = () => {
   const [existingRender3D, setExistingRender3D] = useState([]);
   const [render3DFiles, setRender3DFiles] = useState([]);
   const [countries, setCountries] = useState([]);
+  const [partners, setPartners] = useState([]);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -38,6 +41,7 @@ const AgentConstructionPublications = () => {
     location: '',
     city: '',
     country_id: '',
+    partner_id: '',
     latitude: '',
     longitude: '',
   });
@@ -73,6 +77,12 @@ const AgentConstructionPublications = () => {
         setCountries(Array.isArray(payload) ? payload : payload.data || []);
       })
       .catch((err) => console.error('Erreur chargement pays:', err));
+    partnershipLookupService.getApproved('constructeur')
+      .then((res) => {
+        const payload = res?.data?.data ?? res?.data ?? [];
+        setPartners(Array.isArray(payload) ? payload : []);
+      })
+      .catch((err) => console.error('Erreur chargement partenaires:', err));
   }, []);
 
   const loadProjects = async ({ silent = false } = {}) => {
@@ -132,9 +142,11 @@ const AgentConstructionPublications = () => {
     try {
       await agentService.updateConstructionPublication(editingProject.uuid, { remove_images: [path] });
       setExistingImages((prev) => prev.filter((item) => item !== path));
+      toast.success('Image supprimee avec succes.');
     } catch (err) {
       console.error("Erreur lors de la suppression de l'image:", err);
       setError("Erreur lors de la suppression de l'image.");
+      toast.error("Erreur lors de la suppression de l'image.");
     }
   };
 
@@ -144,9 +156,11 @@ const AgentConstructionPublications = () => {
     try {
       await agentService.updateConstructionPublication(editingProject.uuid, { remove_plans: [path] });
       setExistingPlans((prev) => prev.filter((item) => item !== path));
+      toast.success('Plan supprime avec succes.');
     } catch (err) {
       console.error('Erreur lors de la suppression du plan:', err);
       setError('Erreur lors de la suppression du plan.');
+      toast.error('Erreur lors de la suppression du plan.');
     }
   };
 
@@ -156,9 +170,11 @@ const AgentConstructionPublications = () => {
     try {
       await agentService.updateConstructionPublication(editingProject.uuid, { remove_render_3d: [path] });
       setExistingRender3D((prev) => prev.filter((item) => item !== path));
+      toast.success('Visuel 3D supprime avec succes.');
     } catch (err) {
       console.error('Erreur lors de la suppression du visuel 3D:', err);
       setError('Erreur lors de la suppression du visuel 3D.');
+      toast.error('Erreur lors de la suppression du visuel 3D.');
     }
   };
 
@@ -179,6 +195,7 @@ const AgentConstructionPublications = () => {
       location: project.location || '',
       city: project.city || '',
       country_id: project.country_id || project.country?.id || '',
+      partner_id: project.partner_id || project.partner?.id || '',
       latitude: project.latitude ?? '',
       longitude: project.longitude ?? '',
     });
@@ -202,6 +219,7 @@ const AgentConstructionPublications = () => {
       location: '',
       city: '',
       country_id: '',
+      partner_id: '',
       latitude: '',
       longitude: '',
     });
@@ -219,6 +237,7 @@ const AgentConstructionPublications = () => {
       budget_max: formData.budget_max ? Number(formData.budget_max) : null,
       surface_area: formData.surface_area ? Number(formData.surface_area) : null,
       country_id: formData.country_id || null,
+      partner_id: formData.partner_id || null,
       latitude: formData.latitude !== '' ? Number(formData.latitude) : null,
       longitude: formData.longitude !== '' ? Number(formData.longitude) : null,
     };
@@ -239,14 +258,18 @@ const AgentConstructionPublications = () => {
     try {
       if (editingProject?.uuid) {
         await agentService.updateConstructionPublication(editingProject.uuid, requestData);
+        toast.success('Projet modifie avec succes.');
       } else {
         await agentService.createConstructionPublication(requestData);
+        toast.success('Projet cree avec succes.');
       }
       await loadProjects({ silent: true });
       resetForm();
     } catch (err) {
       console.error('Erreur enregistrement:', err);
-      setError(err.response?.data?.message || 'Erreur lors de l\'enregistrement.');
+      const message = err.response?.data?.message || 'Erreur lors de l\'enregistrement.';
+      setError(message);
+      toast.error(message);
     } finally {
       setSaving(false);
     }
@@ -391,6 +414,20 @@ const AgentConstructionPublications = () => {
                       <option value="">Pays (optionnel)</option>
                       {countries.map((country) => (
                         <option key={country.id} value={country.id}>{country.flag ? `${country.flag} ` : ''}{country.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Partenaire</label>
+                    <select
+                      name="partner_id"
+                      value={formData.partner_id}
+                      onChange={handleChange}
+                      className="w-full rounded-xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
+                    >
+                      <option value="">Partenaire (optionnel)</option>
+                      {partners.map((partner) => (
+                        <option key={partner.id} value={partner.id}>{partner.company_name}</option>
                       ))}
                     </select>
                   </div>
