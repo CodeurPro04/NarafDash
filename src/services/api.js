@@ -268,6 +268,7 @@ export const adminService = {
   // Gestion des messages
   getMessages: (params) => api.get("/v1/admin/messages", { params }),
   getMessage: (uuid) => api.get(`/v1/admin/messages/${uuid}`),
+  getMessageableUsers: (params) => api.get("/v1/messages/users", { params }),
   createMessage: (data) => api.post("/v1/admin/messages", data),
   updateMessage: (uuid, data) => apiUpdate(`/v1/admin/messages/${uuid}`, data),
   deleteMessage: (uuid) => api.delete(`/v1/admin/messages/${uuid}`),

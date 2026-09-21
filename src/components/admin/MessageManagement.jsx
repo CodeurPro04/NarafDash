@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../common/Header';
 import Sidebar from '../common/Sidebar';
+import NewConversationModal from '../common/NewConversationModal';
 import { useToast } from '../common/Toast';
 import { adminService } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -114,13 +115,7 @@ const MessageManagement = () => {
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
 
-  const [composing, setComposing] = useState(false);
-  const [recipientQuery, setRecipientQuery] = useState('');
-  const [recipientResults, setRecipientResults] = useState([]);
-  const [recipientSearching, setRecipientSearching] = useState(false);
-  const [selectedRecipient, setSelectedRecipient] = useState(null);
-  const [composeText, setComposeText] = useState('');
-  const [composeSending, setComposeSending] = useState(false);
+  const [showNewChat, setShowNewChat] = useState(false);
 
   const threadScrollRef = useRef(null);
   const prevThreadLengthRef = useRef(0);
@@ -276,10 +271,22 @@ const MessageManagement = () => {
     }
   };
 
-  const selectConversation = (message) => {
-    setSelectedUuid(message.uuid);
+  const selectConversation = (conversation) => {
+    setSelectedUuid(conversation.uuid);
     setReplyText('');
-    navigate(`/admin/messages?uuid=${message.uuid}`, { replace: true });
+    navigate(`/admin/messages?uuid=${conversation.uuid}`, { replace: true });
+
+    // Mise a jour optimiste : le fil est marque lu localement des le clic,
+    // sans attendre la reponse reseau, pour que le point "non lu" disparaisse
+    // instantanement au lieu de rester visible le temps du round-trip.
+    const rootId = conversation.root.id;
+    setMessages((prev) => prev.map((item) => {
+      const key = item.parent_message_id || item.id;
+      if (key === rootId && item.recipient_id === currentUserId && !item.is_read) {
+        return { ...item, is_read: true };
+      }
+      return item;
+    }));
   };
 
   const closeConversation = () => {
@@ -379,62 +386,20 @@ const MessageManagement = () => {
     return threadRoot.sender_id === currentUserId ? threadRoot.recipient : threadRoot.sender;
   }, [threadRoot, currentUserId]);
 
-  // Recherche debouncee (350ms) du destinataire pour un nouveau message.
-  useEffect(() => {
-    if (!composing || selectedRecipient) return undefined;
-    const query = recipientQuery.trim();
-    if (query.length < 2) {
-      setRecipientResults([]);
-      return undefined;
-    }
-    const timeout = setTimeout(async () => {
-      try {
-        setRecipientSearching(true);
-        const response = await adminService.getUsers({ search: query, status: 'active', per_page: 8 });
-        const payload = response?.data?.data ?? response?.data ?? [];
-        const list = (payload.data || payload || []).filter((u) => u.id !== currentUserId);
-        setRecipientResults(Array.isArray(list) ? list : []);
-      } catch (err) {
-        console.error('Erreur recherche destinataires:', err);
-        setRecipientResults([]);
-      } finally {
-        setRecipientSearching(false);
-      }
-    }, 350);
-    return () => clearTimeout(timeout);
-  }, [recipientQuery, composing, selectedRecipient, currentUserId]);
-
-  const startCompose = () => {
-    setComposing(true);
-    setSelectedUuid(null);
-    setThreadRoot(null);
-    setThread([]);
-    setThreadError('');
-    setRecipientQuery('');
-    setRecipientResults([]);
-    setSelectedRecipient(null);
-    setComposeText('');
-    navigate('/admin/messages', { replace: true });
+  // Liste des destinataires possibles pour une nouvelle conversation : tous
+  // les comptes actifs sont affiches directement (regroupes par role dans la
+  // modale), comme cote agent/gestionnaire, plutot que d'exiger une recherche
+  // au clavier avant de voir qui que ce soit.
+  const searchMessageableUsers = async (search) => {
+    const response = await adminService.getMessageableUsers({ search });
+    return response?.data?.data ?? response?.data ?? [];
   };
 
-  const cancelCompose = () => {
-    setComposing(false);
-    setSelectedRecipient(null);
-    setRecipientQuery('');
-    setRecipientResults([]);
-    setComposeText('');
-  };
-
-  const handleSendNewMessage = async () => {
-    const content = composeText.trim();
-    if (!content || !selectedRecipient || composeSending) return;
+  const startNewConversation = async ({ recipient, message }) => {
     try {
-      setComposeSending(true);
-      const response = await adminService.createMessage({ recipient_id: selectedRecipient.id, message: content });
+      const response = await adminService.createMessage({ recipient_id: recipient.id, message });
       const created = response?.data?.data;
-      setComposing(false);
-      setComposeText('');
-      setSelectedRecipient(null);
+      setShowNewChat(false);
       await loadMessages({ silent: true });
       toast.success('Message envoyé avec succès.');
       if (created?.uuid) {
@@ -444,15 +409,6 @@ const MessageManagement = () => {
     } catch (err) {
       console.error("Erreur lors de l'envoi du nouveau message:", err);
       toast.error(err.response?.data?.message || "Erreur lors de l'envoi du message.");
-    } finally {
-      setComposeSending(false);
-    }
-  };
-
-  const handleComposeKeyDown = (event) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      handleSendNewMessage();
     }
   };
 
@@ -501,11 +457,11 @@ const MessageManagement = () => {
             <div className="grid grid-cols-1 lg:grid-cols-[360px_minmax(0,1fr)] gap-4 items-start">
               {/* Colonne gauche : boite de reception (masquee sur mobile des qu'une conversation est ouverte) */}
               <div
-                className={`surface-panel overflow-hidden flex-col ${(selectedUuid || composing) ? 'hidden lg:flex' : 'flex'}`}
+                className={`surface-panel overflow-hidden flex-col ${selectedUuid ? 'hidden lg:flex' : 'flex'}`}
                 style={{ height: 'calc(100vh - 320px)', minHeight: '520px' }}
               >
                 <div className="p-4 space-y-3 border-b border-[rgba(15,42,46,0.08)] shrink-0">
-                  <button type="button" onClick={startCompose} className="btn-primary w-full justify-center text-sm">
+                  <button type="button" onClick={() => setShowNewChat(true)} className="btn-primary w-full justify-center text-sm">
                     <UserPlus className="h-4 w-4" />
                     Nouveau message
                   </button>
@@ -666,127 +622,10 @@ const MessageManagement = () => {
 
               {/* Colonne droite : conversation (visible sur mobile uniquement une fois selectionnee) */}
               <div
-                className={`surface-panel overflow-hidden flex-col ${(selectedUuid || composing) ? 'flex' : 'hidden lg:flex'}`}
+                className={`surface-panel overflow-hidden flex-col ${selectedUuid ? 'flex' : 'hidden lg:flex'}`}
                 style={{ height: 'calc(100vh - 320px)', minHeight: '520px' }}
               >
-                {composing ? (
-                  <>
-                    <div className="px-5 py-4 border-b border-[rgba(15,42,46,0.08)] flex items-center justify-between gap-3 shrink-0">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <button
-                          type="button"
-                          onClick={cancelCompose}
-                          className="lg:hidden shrink-0 h-8 w-8 rounded-lg border border-[rgb(var(--line))] flex items-center justify-center text-[rgba(15,42,46,0.6)]"
-                          title="Retour a la liste"
-                        >
-                          <ChevronLeft className="h-4 w-4" />
-                        </button>
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-[rgb(var(--ink))]">Nouveau message</p>
-                          {selectedRecipient && (
-                            <p className="text-xs text-[rgba(15,42,46,0.55)] truncate">A : {getName(selectedRecipient)}</p>
-                          )}
-                        </div>
-                      </div>
-                      <button type="button" onClick={cancelCompose} className="btn-ghost text-xs shrink-0">
-                        <X className="h-3.5 w-3.5" />
-                        Annuler
-                      </button>
-                    </div>
-
-                    {!selectedRecipient ? (
-                      <div className="flex-1 overflow-y-auto p-4 space-y-1">
-                        <div className="relative mb-3">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[rgba(15,42,46,0.45)]" />
-                          <input
-                            type="text"
-                            autoFocus
-                            placeholder="Rechercher un admin, un agent, un utilisateur..."
-                            value={recipientQuery}
-                            onChange={(e) => setRecipientQuery(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[rgb(var(--line))] bg-white/70 text-sm focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
-                          />
-                        </div>
-                        {recipientSearching ? (
-                          <p className="text-xs text-[rgba(15,42,46,0.5)] px-1">Recherche...</p>
-                        ) : recipientQuery.trim().length < 2 ? (
-                          <p className="text-xs text-[rgba(15,42,46,0.45)] px-1">Tapez au moins 2 caracteres pour rechercher un destinataire.</p>
-                        ) : recipientResults.length === 0 ? (
-                          <p className="text-xs text-[rgba(15,42,46,0.45)] px-1">Aucun utilisateur trouve.</p>
-                        ) : (
-                          recipientResults.map((person) => {
-                            const name = getName(person);
-                            return (
-                              <button
-                                key={person.id}
-                                type="button"
-                                onClick={() => setSelectedRecipient(person)}
-                                className="w-full flex items-center gap-3 px-2 py-2.5 rounded-xl hover:bg-[rgba(15,42,46,0.04)] text-left transition"
-                              >
-                                <div
-                                  className="h-9 w-9 shrink-0 rounded-lg flex items-center justify-center text-xs font-semibold text-white"
-                                  style={{ backgroundColor: getAvatarColor(name) }}
-                                >
-                                  {getInitials(name)}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-medium text-[rgb(var(--ink))] truncate">{name}</p>
-                                  <p className="text-xs text-[rgba(15,42,46,0.5)] truncate">{person.email}</p>
-                                </div>
-                                {person.role?.name && (
-                                  <span className="chip shrink-0 text-[10px]">{person.role.name}</span>
-                                )}
-                              </button>
-                            );
-                          })
-                        )}
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
-                          <div
-                            className="h-14 w-14 rounded-2xl flex items-center justify-center text-lg font-semibold text-white mb-3"
-                            style={{ backgroundColor: getAvatarColor(getName(selectedRecipient)) }}
-                          >
-                            {getInitials(getName(selectedRecipient))}
-                          </div>
-                          <p className="text-sm font-semibold text-[rgb(var(--ink))]">{getName(selectedRecipient)}</p>
-                          <p className="text-xs text-[rgba(15,42,46,0.5)]">{selectedRecipient.email}</p>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedRecipient(null)}
-                            className="text-xs text-[rgb(var(--clay))] hover:underline mt-3"
-                          >
-                            Changer de destinataire
-                          </button>
-                        </div>
-                        <div className="p-4 border-t border-[rgba(15,42,46,0.08)] shrink-0">
-                          <div className="flex items-end gap-2">
-                            <textarea
-                              value={composeText}
-                              onChange={(e) => setComposeText(e.target.value)}
-                              onKeyDown={handleComposeKeyDown}
-                              rows="2"
-                              maxLength={5000}
-                              autoFocus
-                              placeholder="Ecrivez votre message... (Entree pour envoyer, Maj+Entree pour un saut de ligne)"
-                              className="flex-1 rounded-2xl border border-[rgb(var(--line))] bg-white/70 px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[rgba(199,109,74,0.3)]"
-                            />
-                            <button
-                              type="button"
-                              onClick={handleSendNewMessage}
-                              disabled={!composeText.trim() || composeSending}
-                              className="btn-primary h-11 w-11 !p-0 justify-center shrink-0 disabled:opacity-50"
-                              title="Envoyer"
-                            >
-                              <Send className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </>
-                ) : !selectedUuid ? (
+                {!selectedUuid ? (
                   <div className="flex-1 flex flex-col items-center justify-center text-center px-6">
                     <div className="h-14 w-14 rounded-2xl bg-[rgba(15,42,46,0.06)] flex items-center justify-center mb-4">
                       <MessageSquare className="h-6 w-6 text-[rgba(15,42,46,0.4)]" />
@@ -926,6 +765,14 @@ const MessageManagement = () => {
           </div>
         </main>
       </div>
+      {showNewChat && (
+        <NewConversationModal
+          onClose={() => setShowNewChat(false)}
+          onSearch={searchMessageableUsers}
+          onSend={startNewConversation}
+          getRoleLabel={getSenderLabel}
+        />
+      )}
     </div>
   );
 };
