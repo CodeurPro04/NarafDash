@@ -9,7 +9,7 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { login, logout } = useAuth();
+  const { login, clearSession } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
 
@@ -35,18 +35,18 @@ const Login = () => {
             break;
           case 'proprietaire':
             toast.error("Les proprietaires utilisent l'espace profil du site public.");
-            await logout();
+            await clearSession();
             break;
           case 'visiteur':
             navigate('/visitor/profile');
             break;
           case 'investisseur':
             toast.error("Les investisseurs utilisent l'espace profil du site public.");
-            await logout();
+            await clearSession();
             break;
           case 'entreprise':
             toast.error("Les partenaires utilisent l'espace profil du site public.");
-            await logout();
+            await clearSession();
             break;
           default:
             navigate('/dashboard');

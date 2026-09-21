@@ -257,9 +257,12 @@ const MessageManagement = () => {
       const threadData = response?.data?.thread;
       setThreadRoot(data);
       setThread(Array.isArray(threadData) && threadData.length > 0 ? threadData : (data ? [data] : []));
-      // Ouvrir un fil marque cote backend tous les messages qui m'etaient adresses
-      // comme lus : on rafraichit la liste pour faire disparaitre le point "non lu".
-      if (!silent) loadMessages({ silent: true });
+      // Charger un fil (a l'ouverture, ou lors du rafraichissement periodique
+      // tant qu'il reste ouvert) marque cote backend tous les messages qui
+      // m'etaient adresses comme lus : on rafraichit la liste a chaque fois,
+      // pour que le point "non lu" et les coches de lecture ne restent jamais
+      // en retard sur l'etat reel pendant qu'on est dans la discussion.
+      loadMessages({ silent: true });
     } catch (err) {
       if (silent) return;
       console.error('Erreur lors du chargement de la conversation:', err);

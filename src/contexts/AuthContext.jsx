@@ -108,6 +108,21 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Revoque le token et efface la session locale sans recharger la page :
+  // utile quand on reste deliberement sur l'ecran de connexion (ex. role
+  // sans acces au backoffice) et qu'un rechargement forcerait la
+  // disparition immediate du message d'erreur affiche a l'utilisateur.
+  const clearSession = async () => {
+    try {
+      await authService.logout();
+    } catch (error) {
+      console.error("Erreur lors de la deconnexion:", error);
+    } finally {
+      setUser(null);
+      clearStoredSession();
+    }
+  };
+
   const updateUser = (updatedUser) => {
     localStorage.setItem("user", JSON.stringify(updatedUser));
     setUser(updatedUser);
@@ -119,6 +134,7 @@ export const AuthProvider = ({ children }) => {
         user,
         login,
         logout,
+        clearSession,
         loading,
         checkAuthStatus,
         updateUser,
