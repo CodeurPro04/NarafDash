@@ -44,12 +44,6 @@ import AgentConstructionPublications from "./components/agent/AgentConstructionP
 import AgentInvestmentPublications from "./components/agent/AgentInvestmentPublications";
 import AgentInvestmentProposals from "./components/agent/AgentInvestmentProposals";
 import VisitorProfile from "./components/visitor/VisitorProfile";
-import DashboardInvestor from "./components/investor/DashboardInvestor";
-import InvestorOpportunities from "./components/investor/InvestorOpportunities";
-import InvestorProposals from "./components/investor/InvestorProposals";
-import InvestorPortfolio from "./components/investor/InvestorPortfolio";
-import DashboardCompany from "./components/company/DashboardCompany";
-import CompanyProfile from "./components/company/CompanyProfile";
 import AdminMessageDetail from "./components/admin/MessageDetail";
 import { ROLES } from "./utils/roles";
 
@@ -411,58 +405,6 @@ function App() {
               element={
                 <ProtectedRoute allowedRoles={[ROLES.VISITOR]}>
                   <VisitorProfile />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Routes Investor */}
-            <Route
-              path="/investor/dashboard"
-              element={
-                <ProtectedRoute allowedRoles={[ROLES.INVESTOR]}>
-                  <DashboardInvestor />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/investor/opportunities"
-              element={
-                <ProtectedRoute allowedRoles={[ROLES.INVESTOR]}>
-                  <InvestorOpportunities />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/investor/proposals"
-              element={
-                <ProtectedRoute allowedRoles={[ROLES.INVESTOR]}>
-                  <InvestorProposals />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/investor/portfolio"
-              element={
-                <ProtectedRoute allowedRoles={[ROLES.INVESTOR]}>
-                  <InvestorPortfolio />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Routes Company */}
-            <Route
-              path="/company/dashboard"
-              element={
-                <ProtectedRoute allowedRoles={[ROLES.COMPANY]}>
-                  <DashboardCompany />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/company/profile"
-              element={
-                <ProtectedRoute allowedRoles={[ROLES.COMPANY]}>
-                  <CompanyProfile />
                 </ProtectedRoute>
               }
             />

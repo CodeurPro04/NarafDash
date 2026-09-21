@@ -314,18 +314,6 @@ const Sidebar = () => {
     [ROLES.VISITOR]: [
       { path: '/visitor/profile', icon: User, label: 'Profil' },
     ],
-    [ROLES.INVESTOR]: [
-      { path: '/investor/dashboard', icon: LayoutDashboard, label: 'Tableau de bord' },
-      { path: '/investor/opportunities', icon: TrendingUp, label: 'Opportunites' },
-      { path: '/investor/proposals', icon: FileText, label: 'Propositions' },
-      { path: '/investor/portfolio', icon: BarChart3, label: 'Portefeuille' },
-    ],
-    [ROLES.COMPANY]: [
-      { path: '/company/dashboard', icon: LayoutDashboard, label: 'Tableau de bord' },
-      { path: '/company/partnership', icon: Handshake, label: 'Partenariat' },
-      { path: '/company/applications', icon: FileText, label: 'Candidatures' },
-      { path: '/company/profile', icon: Shield, label: 'Profil' },
-    ],
   };
 
   const currentMenu = menuItems[currentRole] || [];

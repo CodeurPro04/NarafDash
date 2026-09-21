@@ -26,9 +26,9 @@ const Dashboard = () => {
     case ROLES.VISITOR:
       return <Navigate to="/visitor/profile" />;
     case ROLES.INVESTOR:
-      return <Navigate to="/investor/dashboard" />;
+      return <Navigate to="/" />;
     case ROLES.COMPANY:
-      return <Navigate to="/company/dashboard" />;
+      return <Navigate to="/" />;
     default:
       return (
         <div className="app-shell flex">

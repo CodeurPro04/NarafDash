@@ -23,8 +23,6 @@ const Header = () => {
       admin: '/admin/properties',
       gestionnaire: '/manager/properties',
       agent: '/agent/all-properties',
-      investor: '/investor/opportunities',
-      company: '/company/dashboard',
       visitor: '/visitor/profile',
     };
     return mapping[role] || '/dashboard';

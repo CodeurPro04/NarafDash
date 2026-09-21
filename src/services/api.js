@@ -638,22 +638,6 @@ export const visitorService = {
 };
 
 // ====================
-// SERVICES INVESTISSEUR (INVESTOR)
-// ====================
-
-export const investorService = {
-  // Propositions d'investissement
-  proposeInvestment: (uuid, data) =>
-    api.post(`/v1/investments/${uuid}/propose`, data),
-  getMyProposals: () => api.get("/v1/investisseur/investments/my-proposals"),
-  getProposalDetails: (uuid) =>
-    api.get(`/v1/investisseur/investments/proposals/${uuid}`),
-  // Demandes envoyées via le formulaire public "être recontacté" (ClientRequest)
-  getMyClientRequests: () =>
-    api.get("/v1/client-requests/mine", { params: { request_type: "investissement" } }),
-};
-
-// ====================
 // SERVICES ENTREPRISE PARTENAIRE (COMPANY)
 // ====================
 
@@ -670,19 +654,6 @@ export const partnerProductService = {
 export const partnershipLookupService = {
   getApproved: (type) =>
     api.get("/v1/partnerships/lookup", { params: type ? { type } : undefined }),
-};
-
-export const companyService = {
-  applyForPartnership: (data) =>
-    api.post(
-      "/v1/partnership/apply",
-      data,
-      data instanceof FormData
-        ? { headers: { "Content-Type": "multipart/form-data" } }
-        : undefined,
-    ),
-  getMyApplication: () => api.get("/v1/partnership/my-application"),
-  updateApplication: (data) => apiUpdate("/v1/partnership/update", data),
 };
 
 export default api;

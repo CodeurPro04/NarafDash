@@ -41,10 +41,12 @@ const Login = () => {
             navigate('/visitor/profile');
             break;
           case 'investisseur':
-            navigate('/investor/dashboard');
+            toast.error("Les investisseurs utilisent l'espace profil du site public.");
+            await logout();
             break;
           case 'entreprise':
-            navigate('/company/dashboard');
+            toast.error("Les partenaires utilisent l'espace profil du site public.");
+            await logout();
             break;
           default:
             navigate('/dashboard');
